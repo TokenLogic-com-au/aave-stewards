@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 /**
- * @title IAaveStMaticWithdrawer
+ * @title IAaveStMaticWithdrawerSteward
  * @dev The interface of AaveStMaticWithdrawer
  */
-interface IAaveStMaticWithdrawer {
+interface IAaveStMaticWithdrawerSteward {
     /**
      * @dev emitted when a new Withdrawal is requested
      * @param amount the amount requested to be withdrawn

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
 /// @title StMATIC interface.
 /// @author 2021 ShardLabs
 interface IStMatic {

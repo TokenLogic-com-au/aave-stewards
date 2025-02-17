@@ -7,7 +7,7 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
-import {AaveStMaticWithdrawerSteward, IAaveStMaticWithdrawerSteward, IStMatic} from "src/asset-manager/stmatic-withdrawer/AaveStMaticWithdrawerSteward.sol";
+import {StakedTokenWithdrawerSteward, IStakedTokenWithdrawerSteward, IStMatic} from "src/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerSteward.sol";
 import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
@@ -18,8 +18,8 @@ interface IStakeManager {
     function setCurrentEpoch(uint256 _currentEpoch) external;
 }
 
-/// @dev forge test --match-path=tests/asset-manager/stmatic-withdrawer/AaveStMaticWithdrawerStewardTest.t.sol -vv
-contract AaveStMaticWithdrawerStewardTest is Test {
+/// @dev forge test --match-path=tests/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerStewardTest.t.sol -vv
+contract StakedTokenWithdrawerStewardTest is Test {
     address public constant OWNER = GovernanceV3Ethereum.EXECUTOR_LVL_1;
     address public constant GUARDIAN = MiscEthereum.PROTOCOL_GUARDIAN;
     address public constant COLLECTOR = address(AaveV3Ethereum.COLLECTOR);
@@ -27,14 +27,22 @@ contract AaveStMaticWithdrawerStewardTest is Test {
     address public constant ST_MATIC =
         0x9ee91F9f426fA633d227f7a9b000E28b9dfd8599;
 
-    AaveStMaticWithdrawerSteward public withdrawer;
+    StakedTokenWithdrawerSteward public withdrawer;
 
-    event StartedWithdrawal(uint256 amount, uint256 indexed tokenId);
-    event FinalizedWithdrawal(uint256 amount, uint256 indexed tokenId);
+    event StartedWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed tokenId
+    );
+    event FinalizedWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed tokenId
+    );
 
     function setUp() public virtual {
         vm.createSelectFork("mainnet", 21867043);
-        withdrawer = new AaveStMaticWithdrawerSteward(ST_MATIC);
+        withdrawer = new StakedTokenWithdrawerSteward(ST_MATIC);
     }
 
     function _unpauseStMATIC() internal {
@@ -60,16 +68,16 @@ contract AaveStMaticWithdrawerStewardTest is Test {
     }
 }
 
-contract RequestWithdrawTest is AaveStMaticWithdrawerStewardTest {
+contract RequestWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
 
     function test_revertsIf_InsufficientBalance() public {
         vm.startPrank(GUARDIAN);
 
         vm.expectRevert(
-            IAaveStMaticWithdrawerSteward.InsufficientBalance.selector
+            IStakedTokenWithdrawerSteward.InsufficientBalance.selector
         );
-        withdrawer.requestWithdraw(amount);
+        withdrawer.requestWithdrawStMatic(amount);
 
         vm.stopPrank();
     }
@@ -79,8 +87,8 @@ contract RequestWithdrawTest is AaveStMaticWithdrawerStewardTest {
         deal(ST_MATIC, address(withdrawer), amount);
 
         vm.expectEmit(true, true, false, true, address(withdrawer));
-        emit StartedWithdrawal(amount, 4173); // dynamically calculated 4173 for test
-        uint256 tokenId = withdrawer.requestWithdraw(amount);
+        emit StartedWithdrawal(ST_MATIC, amount, 4173); // dynamically calculated 4173 for test
+        uint256 tokenId = withdrawer.requestWithdrawStMatic(amount);
 
         uint256 amountAfter = IERC20(ST_MATIC).balanceOf(address(withdrawer));
         address tokenOwner = IERC721(IStMatic(ST_MATIC).poLidoNFT()).ownerOf(
@@ -94,7 +102,7 @@ contract RequestWithdrawTest is AaveStMaticWithdrawerStewardTest {
     }
 }
 
-contract FinalizeWithdrawTest is AaveStMaticWithdrawerStewardTest {
+contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
     uint256 tokenId;
 
@@ -104,18 +112,18 @@ contract FinalizeWithdrawTest is AaveStMaticWithdrawerStewardTest {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
 
-        tokenId = withdrawer.requestWithdraw(amount);
+        tokenId = withdrawer.requestWithdrawStMatic(amount);
         vm.stopPrank();
     }
 
     function test_revertsIf_InvalidOwner() public {
-        vm.expectRevert(IAaveStMaticWithdrawerSteward.InvalidOwner.selector);
-        withdrawer.finalizeWithdraw(tokenId - 1);
+        vm.expectRevert(IStakedTokenWithdrawerSteward.InvalidOwner.selector);
+        withdrawer.finalizeWithdrawStMatic(tokenId - 1);
     }
 
     function test_revertsIf_EpochNotReached() public {
         vm.expectRevert("Not able to claim yet");
-        withdrawer.finalizeWithdraw(tokenId);
+        withdrawer.finalizeWithdrawStMatic(tokenId);
     }
 
     function test_success() public {
@@ -139,8 +147,8 @@ contract FinalizeWithdrawTest is AaveStMaticWithdrawerStewardTest {
         );
 
         vm.expectEmit(true, true, false, true, address(withdrawer));
-        emit FinalizedWithdrawal(withdrawAmount, tokenId);
-        withdrawer.finalizeWithdraw(tokenId);
+        emit FinalizedWithdrawal(ST_MATIC, withdrawAmount, tokenId);
+        withdrawer.finalizeWithdrawStMatic(tokenId);
 
         uint256 amountAfter = IERC20(IStMatic(ST_MATIC).token()).balanceOf(
             COLLECTOR
@@ -154,7 +162,7 @@ contract FinalizeWithdrawTest is AaveStMaticWithdrawerStewardTest {
     }
 }
 
-contract TransferOwnership is AaveStMaticWithdrawerStewardTest {
+contract TransferOwnership is StakedTokenWithdrawerStewardTest {
     function test_revertsIf_invalidCaller() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -175,7 +183,7 @@ contract TransferOwnership is AaveStMaticWithdrawerStewardTest {
     }
 }
 
-contract UpdateGuardian is AaveStMaticWithdrawerStewardTest {
+contract UpdateGuardian is StakedTokenWithdrawerStewardTest {
     function test_revertsIf_invalidCaller() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -196,7 +204,7 @@ contract UpdateGuardian is AaveStMaticWithdrawerStewardTest {
     }
 }
 
-contract EmergencyTokenTransfer is AaveStMaticWithdrawerStewardTest {
+contract EmergencyTokenTransfer is StakedTokenWithdrawerStewardTest {
     uint256 WITHDRAWAL_AMOUNT = 1_000e18;
 
     function test_revertsIf_invalidCaller() public {
@@ -228,7 +236,7 @@ contract EmergencyTokenTransfer is AaveStMaticWithdrawerStewardTest {
     }
 }
 
-contract Emergency721TokenTransfer is AaveStMaticWithdrawerStewardTest {
+contract Emergency721TokenTransfer is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
     uint256 tokenId;
     IERC721 poLidoNFT;
@@ -241,7 +249,7 @@ contract Emergency721TokenTransfer is AaveStMaticWithdrawerStewardTest {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
 
-        tokenId = withdrawer.requestWithdraw(amount);
+        tokenId = withdrawer.requestWithdrawStMatic(amount);
         vm.stopPrank();
     }
 

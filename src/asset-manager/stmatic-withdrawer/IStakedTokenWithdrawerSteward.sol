@@ -2,23 +2,31 @@
 pragma solidity ^0.8.13;
 
 /**
- * @title IAaveStMaticWithdrawerSteward
- * @dev The interface of AaveStMaticWithdrawer
+ * @title IStakedTokenWithdrawerSteward
+ * @dev The interface of StakedTokenWithdrawerSteward
  */
-interface IAaveStMaticWithdrawerSteward {
+interface IStakedTokenWithdrawerSteward {
     /**
      * @dev emitted when a new Withdrawal is requested
      * @param amount the amount requested to be withdrawn
      * @param tokenId the tokenId of NFT to handle claim tokens
      */
-    event StartedWithdrawal(uint256 amount, uint256 indexed tokenId);
+    event StartedWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed tokenId
+    );
 
     /**
      * @dev emitted when a new Withdrawal is requested
-     * @param amount the amount of WETH withdrawn to collector
+     * @param amount the withdrawn amount to collector
      * @param tokenId the tokenId of NFT to handle claim tokens
      */
-    event FinalizedWithdrawal(uint256 amount, uint256 indexed tokenId);
+    event FinalizedWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed tokenId
+    );
 
     /**
      * @dev return address of StMatic contract
@@ -31,13 +39,15 @@ interface IAaveStMaticWithdrawerSteward {
      * @param amount the amount to be withdrawn. this amount should be deposited helper before this action
      * @return tokenId the id of IPoLido NFT
      */
-    function requestWithdraw(uint256 amount) external returns (uint256 tokenId);
+    function requestWithdrawStMatic(
+        uint256 amount
+    ) external returns (uint256 tokenId);
 
     /**
      * @dev claim MATIC from stMatic contract
      * @param tokenId the id of IPoLido NFT
      */
-    function finalizeWithdraw(uint256 tokenId) external;
+    function finalizeWithdrawStMatic(uint256 tokenId) external;
 
     /// @dev reverts when balance of helper insufficient
     error InsufficientBalance();

@@ -11,23 +11,23 @@ import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
 
-import {IAaveStMaticWithdrawerSteward} from "./IAaveStMaticWithdrawerSteward.sol";
+import {IStakedTokenWithdrawerSteward} from "./IStakedTokenWithdrawerSteward.sol";
 import {IStMatic} from "./interfaces/IStMatic.sol";
 
 /**
- * @title AaveStMaticWithdrawerSteward
+ * @title StakedTokenWithdrawerSteward
  * @author TokenLogic
  * @notice This contract facilitates withdrawals of stMATIC tokens through the Lido staking mechanism
  * and transfers the withdrawn funds to the Aave V3 Collector contract.
  */
-contract AaveStMaticWithdrawerSteward is
+contract StakedTokenWithdrawerSteward is
     OwnableWithGuardian,
     Rescuable721,
-    IAaveStMaticWithdrawerSteward
+    IStakedTokenWithdrawerSteward
 {
     using SafeERC20 for IERC20;
 
-    /// @inheritdoc IAaveStMaticWithdrawerSteward
+    /// @inheritdoc IStakedTokenWithdrawerSteward
     address public immutable ST_MATIC;
 
     constructor(
@@ -42,8 +42,8 @@ contract AaveStMaticWithdrawerSteward is
         IERC20(stMatic).approve(address(stMatic), type(uint256).max);
     }
 
-    /// @inheritdoc IAaveStMaticWithdrawerSteward
-    function requestWithdraw(
+    /// @inheritdoc IStakedTokenWithdrawerSteward
+    function requestWithdrawStMatic(
         uint256 amount
     ) external onlyOwnerOrGuardian returns (uint256 tokenId) {
         if (amount > IERC20(ST_MATIC).balanceOf(address(this))) {
@@ -52,11 +52,11 @@ contract AaveStMaticWithdrawerSteward is
 
         tokenId = IStMatic(ST_MATIC).requestWithdraw(amount, address(this));
 
-        emit StartedWithdrawal(amount, tokenId);
+        emit StartedWithdrawal(ST_MATIC, amount, tokenId);
     }
 
-    /// @inheritdoc IAaveStMaticWithdrawerSteward
-    function finalizeWithdraw(uint256 tokenId) external {
+    /// @inheritdoc IStakedTokenWithdrawerSteward
+    function finalizeWithdrawStMatic(uint256 tokenId) external {
         IERC721 poLidoNft = IERC721(IStMatic(ST_MATIC).poLidoNFT());
         if (poLidoNft.ownerOf(tokenId) != address(this)) {
             revert InvalidOwner();
@@ -70,7 +70,7 @@ contract AaveStMaticWithdrawerSteward is
         uint256 amount = token.balanceOf(address(this));
         token.transfer(address(AaveV3Ethereum.COLLECTOR), amount);
 
-        emit FinalizedWithdrawal(amount, tokenId);
+        emit FinalizedWithdrawal(ST_MATIC, amount, tokenId);
     }
 
     /// @inheritdoc Rescuable

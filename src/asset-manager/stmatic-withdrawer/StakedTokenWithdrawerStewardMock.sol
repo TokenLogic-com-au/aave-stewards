@@ -35,7 +35,7 @@ contract StakedTokenWithdrawerSteward is
     )
         OwnableWithGuardian(
             GovernanceV3Ethereum.EXECUTOR_LVL_1,
-            MiscEthereum.PROTOCOL_GUARDIAN
+            0x94A8518B76A3c45F5387B521695024379d43d715
         )
     {
         ST_MATIC = stMatic;

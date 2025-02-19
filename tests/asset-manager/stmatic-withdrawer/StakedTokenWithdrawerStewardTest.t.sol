@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console} from "forge-std/Test.sol";
+import "forge-std/Test.sol";
+import "forge-std/StdStorage.sol";
 
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
-import {StakedTokenWithdrawerSteward, IStakedTokenWithdrawerSteward, IStMatic} from "src/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerSteward.sol";
-import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
+import {StakedTokenWithdrawerSteward, IStakedTokenWithdrawerSteward, IStMatic, IWithdrawalQueueERC721} from "src/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerSteward.sol";
+import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
 import {IRescuable} from "solidity-utils/contracts/utils/interfaces/IRescuable.sol";
@@ -23,9 +24,11 @@ contract StakedTokenWithdrawerStewardTest is Test {
     address public constant OWNER = GovernanceV3Ethereum.EXECUTOR_LVL_1;
     address public constant GUARDIAN = MiscEthereum.PROTOCOL_GUARDIAN;
     address public constant COLLECTOR = address(AaveV3Ethereum.COLLECTOR);
-    // https://etherscan.io/address/0x9ee91F9f426fA633d227f7a9b000E28b9dfd8599
-    address public constant ST_MATIC =
-        0x9ee91F9f426fA633d227f7a9b000E28b9dfd8599;
+    address public constant WETH = AaveV3EthereumAssets.WETH_UNDERLYING;
+    address public constant WSTETH = AaveV3EthereumAssets.wstETH_UNDERLYING;
+
+    address public ST_MATIC;
+    address public UNSTETH;
 
     StakedTokenWithdrawerSteward public withdrawer;
 
@@ -43,6 +46,8 @@ contract StakedTokenWithdrawerStewardTest is Test {
     function setUp() public virtual {
         vm.createSelectFork("mainnet", 21867043);
         withdrawer = new StakedTokenWithdrawerSteward();
+        ST_MATIC = withdrawer.ST_MATIC();
+        UNSTETH = withdrawer.WSTETH_WITHDRAWAL_QUEUE();
     }
 
     function _unpauseStMATIC() internal {
@@ -68,7 +73,7 @@ contract StakedTokenWithdrawerStewardTest is Test {
     }
 }
 
-contract StartWithdrawTest is StakedTokenWithdrawerStewardTest {
+contract StMaticStartWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
 
     function test_success() public {
@@ -89,7 +94,7 @@ contract StartWithdrawTest is StakedTokenWithdrawerStewardTest {
     }
 }
 
-contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
+contract StMaticFinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
     uint256 tokenId = 4173; // dynamically calculated
 
@@ -142,6 +147,202 @@ contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
     }
 }
 
+contract WstEthStartWithdrawTest is StakedTokenWithdrawerStewardTest {
+    uint256 amount = 100e18;
+
+    function test_revertsIf_invalidCaller() public {
+        vm.prank(OWNER);
+        deal(WSTETH, address(withdrawer), amount);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector,
+                address(this)
+            )
+        );
+        withdrawer.startWithdrawWstEth(amounts);
+        vm.stopPrank();
+    }
+
+    function test_startWithdrawalOwner() public {
+        uint256 stEthBalanceBefore = IERC20(WSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 lidoNftBalanceBefore = IERC20(UNSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 nextIndex = withdrawer.nextIndex();
+
+        vm.startPrank(OWNER);
+        deal(WSTETH, address(withdrawer), amount);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        vm.expectEmit(address(withdrawer));
+        emit StartedWithdrawal(WSTETH, amounts, nextIndex);
+        withdrawer.startWithdrawWstEth(amounts);
+        vm.stopPrank();
+
+        uint256 stEthBalanceAfter = IERC20(WSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 lidoNftBalanceAfter = IERC20(UNSTETH).balanceOf(
+            address(withdrawer)
+        );
+
+        assertEq(stEthBalanceAfter, stEthBalanceBefore);
+        assertEq(lidoNftBalanceAfter, lidoNftBalanceBefore + 1);
+    }
+
+    function test_startWithdrawalGuardian() public {
+        uint256 stEthBalanceBefore = IERC20(WSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 lidoNftBalanceBefore = IERC20(UNSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 nextIndex = withdrawer.nextIndex();
+
+        vm.prank(OWNER);
+        deal(WSTETH, address(withdrawer), amount);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        vm.expectEmit(address(withdrawer));
+        emit StartedWithdrawal(WSTETH, amounts, nextIndex);
+        vm.prank(GUARDIAN);
+        withdrawer.startWithdrawWstEth(amounts);
+
+        uint256 stEthBalanceAfter = IERC20(WSTETH).balanceOf(
+            address(withdrawer)
+        );
+        uint256 lidoNftBalanceAfter = IERC20(UNSTETH).balanceOf(
+            address(withdrawer)
+        );
+
+        assertEq(stEthBalanceAfter, stEthBalanceBefore);
+        assertEq(lidoNftBalanceAfter, lidoNftBalanceBefore + 1);
+    }
+}
+
+contract WstEthFinalizeWithdrawalTest is StakedTokenWithdrawerStewardTest {
+    using stdStorage for StdStorage;
+
+    /// at block #21867043 0xb9b...A93 already has a UNSTETH token representing a 999999999900 wei withdrawal
+    address public constant UNSTETH_OWNER =
+        0xb9b8F880dCF1bb34933fcDb375EEdE6252177A93;
+    uint256 amount = 2e18;
+    uint256 withdrawalAmount = 1173102309960;
+
+    function setUp() public override {
+        super.setUp();
+
+        vm.startPrank(OWNER);
+        /// transfer the unSTETH to withdrawer
+        StakedTokenWithdrawerSteward(payable(UNSTETH_OWNER))
+            .emergency721TokenTransfer(
+                address(UNSTETH),
+                address(withdrawer),
+                46283
+            );
+
+        /// start an withdrawal to create the storage slot
+        AaveV3Ethereum.COLLECTOR.transfer(
+            address(WSTETH),
+            address(withdrawer),
+            amount
+        );
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        withdrawer.startWithdrawWstEth(amounts);
+        vm.stopPrank();
+
+        /// override the storage slot to the requestId respective to the unSTETH NFT
+        /// and the minCheckpointIndex
+        uint256 key = 0;
+        uint256 reqId = 46283;
+        uint256 minIndex = 429;
+        // Calculate the storage slot for requests[0].requestIds[0]
+        uint256 requestsSlot = stdstore
+            .target(address(withdrawer))
+            .sig("requests(uint256)")
+            .with_key(key)
+            .find(); // Finds the storage slot for requests[0]
+
+        // The requestIds array is at requestsSlot + 1 (since token occupies the first slot)
+        uint256 requestIdsSlot = uint256(
+            keccak256(abi.encode(requestsSlot + 1))
+        );
+        // The first element of the array is at requestIdsSlot
+        uint256 elementSlot = requestIdsSlot + key;
+
+        // Write the new value to requests[0].requestIds[0]
+        vm.store(address(withdrawer), bytes32(elementSlot), bytes32(reqId));
+
+        stdstore
+            .target(address(withdrawer))
+            .sig("minCheckpointIndex()")
+            .checked_write(minIndex);
+    }
+
+    function test_finalizeWithdrawalGuardian() public {
+        uint256 collectorBalanceBefore = IERC20(WETH).balanceOf(COLLECTOR);
+
+        vm.deal(address(withdrawer), 0);
+
+        vm.startPrank(GUARDIAN);
+        vm.expectEmit(address(withdrawer));
+        emit FinalizedWithdrawal(WSTETH, withdrawalAmount, 0);
+        withdrawer.finalizeWithdraw(0);
+        vm.stopPrank();
+
+        uint256 collectorBalanceAfter = IERC20(WETH).balanceOf(COLLECTOR);
+
+        assertEq(
+            collectorBalanceAfter,
+            collectorBalanceBefore + withdrawalAmount
+        );
+    }
+
+    function test_finalizeWithdrawalOwner() public {
+        uint256 collectorBalanceBefore = IERC20(WETH).balanceOf(COLLECTOR);
+
+        vm.deal(address(withdrawer), 0);
+
+        vm.startPrank(OWNER);
+        vm.expectEmit(address(withdrawer));
+        emit FinalizedWithdrawal(WSTETH, withdrawalAmount, 0);
+        withdrawer.finalizeWithdraw(0);
+        vm.stopPrank();
+
+        uint256 collectorBalanceAfter = IERC20(WETH).balanceOf(COLLECTOR);
+
+        assertEq(
+            collectorBalanceAfter,
+            collectorBalanceBefore + withdrawalAmount
+        );
+    }
+
+    function test_finalizeWithdrawalWithExtraFunds() public {
+        uint256 collectorBalanceBefore = IERC20(WETH).balanceOf(COLLECTOR);
+
+        // /// send 1 wei to withdrawer
+        vm.deal(address(withdrawer), 1);
+
+        vm.startPrank(OWNER);
+        vm.expectEmit(address(withdrawer));
+        emit FinalizedWithdrawal(WSTETH, withdrawalAmount + 1, 0);
+        withdrawer.finalizeWithdraw(0);
+        vm.stopPrank();
+
+        uint256 collectorBalanceAfter = IERC20(WETH).balanceOf(COLLECTOR);
+
+        assertEq(
+            collectorBalanceAfter,
+            collectorBalanceBefore + withdrawalAmount + 1
+        );
+    }
+}
+
 contract TransferOwnership is StakedTokenWithdrawerStewardTest {
     function test_revertsIf_invalidCaller() public {
         vm.expectRevert(
@@ -185,32 +386,24 @@ contract UpdateGuardian is StakedTokenWithdrawerStewardTest {
 }
 
 contract EmergencyTokenTransfer is StakedTokenWithdrawerStewardTest {
-    uint256 WITHDRAWAL_AMOUNT = 1_000e18;
+    uint256 amount = 1_000e18;
 
     function test_revertsIf_invalidCaller() public {
-        deal(ST_MATIC, address(withdrawer), WITHDRAWAL_AMOUNT);
+        deal(ST_MATIC, address(withdrawer), amount);
         vm.expectRevert(IRescuable.OnlyRescueGuardian.selector);
-        withdrawer.emergencyTokenTransfer(
-            ST_MATIC,
-            COLLECTOR,
-            WITHDRAWAL_AMOUNT
-        );
+        withdrawer.emergencyTokenTransfer(ST_MATIC, COLLECTOR, amount);
     }
 
     function test_successful_governanceCaller() public {
         uint256 initialCollectorBalance = IERC20(ST_MATIC).balanceOf(COLLECTOR);
-        deal(ST_MATIC, address(withdrawer), WITHDRAWAL_AMOUNT);
+        deal(ST_MATIC, address(withdrawer), amount);
         vm.startPrank(OWNER);
-        withdrawer.emergencyTokenTransfer(
-            ST_MATIC,
-            COLLECTOR,
-            WITHDRAWAL_AMOUNT
-        );
+        withdrawer.emergencyTokenTransfer(ST_MATIC, COLLECTOR, amount);
         vm.stopPrank();
 
         assertEq(
             IERC20(ST_MATIC).balanceOf(COLLECTOR),
-            initialCollectorBalance + WITHDRAWAL_AMOUNT
+            initialCollectorBalance + amount
         );
         assertEq(IERC20(ST_MATIC).balanceOf(address(withdrawer)), 0);
     }

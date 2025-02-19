@@ -47,4 +47,8 @@ interface IWithdrawalQueueERC721 {
     /// @notice length of the checkpoint array. Last possible value for the hint.
     ///  NB! checkpoints are indexed from 1, so it returns 0 if there is no checkpoints
     function getLastCheckpointIndex() external view returns (uint256);
+
+    /// @notice id of the last finalized request
+    ///  NB! requests are indexed from 1, so it returns 0 if there is no finalized requests in the queue
+    function getLastFinalizedRequestId() external view returns (uint256);
 }

@@ -172,4 +172,8 @@ contract StakedTokenWithdrawerSteward is
     ) public pure override(RescuableBase, IRescuableBase) returns (uint256) {
         return type(uint256).max;
     }
+
+    fallback() external payable {}
+
+    receive() external payable {}
 }

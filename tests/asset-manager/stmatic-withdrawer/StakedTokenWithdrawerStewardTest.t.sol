@@ -31,7 +31,7 @@ contract StakedTokenWithdrawerStewardTest is Test {
 
     event StartedWithdrawal(
         address indexed token,
-        uint256 amount,
+        uint256[] amounts,
         uint256 indexed tokenId
     );
     event FinalizedWithdrawal(
@@ -42,7 +42,7 @@ contract StakedTokenWithdrawerStewardTest is Test {
 
     function setUp() public virtual {
         vm.createSelectFork("mainnet", 21867043);
-        withdrawer = new StakedTokenWithdrawerSteward(ST_MATIC);
+        withdrawer = new StakedTokenWithdrawerSteward();
     }
 
     function _unpauseStMATIC() internal {
@@ -68,35 +68,22 @@ contract StakedTokenWithdrawerStewardTest is Test {
     }
 }
 
-contract RequestWithdrawTest is StakedTokenWithdrawerStewardTest {
+contract StartWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
-
-    function test_revertsIf_InsufficientBalance() public {
-        vm.startPrank(GUARDIAN);
-
-        vm.expectRevert(
-            IStakedTokenWithdrawerSteward.InsufficientBalance.selector
-        );
-        withdrawer.requestWithdrawStMatic(amount);
-
-        vm.stopPrank();
-    }
 
     function test_success() public {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
 
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
         vm.expectEmit(true, true, false, true, address(withdrawer));
-        emit StartedWithdrawal(ST_MATIC, amount, 4173); // dynamically calculated 4173 for test
-        uint256 tokenId = withdrawer.requestWithdrawStMatic(amount);
+        emit StartedWithdrawal(ST_MATIC, amounts, 0);
+        withdrawer.startWithdrawStMatic(amount);
 
         uint256 amountAfter = IERC20(ST_MATIC).balanceOf(address(withdrawer));
-        address tokenOwner = IERC721(IStMatic(ST_MATIC).poLidoNFT()).ownerOf(
-            tokenId
-        );
 
         assertEq(amountAfter, 0);
-        assertEq(tokenOwner, address(withdrawer));
 
         vm.stopPrank();
     }
@@ -104,7 +91,7 @@ contract RequestWithdrawTest is StakedTokenWithdrawerStewardTest {
 
 contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
-    uint256 tokenId;
+    uint256 tokenId = 4173; // dynamically calculated
 
     function setUp() public override {
         super.setUp();
@@ -112,26 +99,19 @@ contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
 
-        tokenId = withdrawer.requestWithdrawStMatic(amount);
+        withdrawer.startWithdrawStMatic(amount);
         vm.stopPrank();
-    }
-
-    function test_revertsIf_InvalidOwner() public {
-        vm.expectRevert(IStakedTokenWithdrawerSteward.InvalidOwner.selector);
-        withdrawer.finalizeWithdrawStMatic(tokenId - 1);
     }
 
     function test_revertsIf_EpochNotReached() public {
         vm.expectRevert("Not able to claim yet");
-        withdrawer.finalizeWithdrawStMatic(tokenId);
+        withdrawer.finalizeWithdraw(0);
     }
 
     function test_success() public {
         uint256 requestEpoch;
         uint256 withdrawAmount;
-        (, , requestEpoch, ) = IStMatic(ST_MATIC).token2WithdrawRequest(
-            tokenId
-        );
+        (, , requestEpoch, ) = IStMatic(ST_MATIC).token2WithdrawRequest(0);
         if (requestEpoch == 0) {
             IStMatic.RequestWithdraw[] memory requests = IStMatic(ST_MATIC)
                 .getToken2WithdrawRequests(tokenId);
@@ -147,8 +127,8 @@ contract FinalizeWithdrawTest is StakedTokenWithdrawerStewardTest {
         );
 
         vm.expectEmit(true, true, false, true, address(withdrawer));
-        emit FinalizedWithdrawal(ST_MATIC, withdrawAmount, tokenId);
-        withdrawer.finalizeWithdrawStMatic(tokenId);
+        emit FinalizedWithdrawal(ST_MATIC, withdrawAmount, 0);
+        withdrawer.finalizeWithdraw(0);
 
         uint256 amountAfter = IERC20(IStMatic(ST_MATIC).token()).balanceOf(
             COLLECTOR
@@ -238,7 +218,7 @@ contract EmergencyTokenTransfer is StakedTokenWithdrawerStewardTest {
 
 contract Emergency721TokenTransfer is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
-    uint256 tokenId;
+    uint256 tokenId = 4173; // dynamically calculated
     IERC721 poLidoNFT;
 
     function setUp() public override {
@@ -249,7 +229,7 @@ contract Emergency721TokenTransfer is StakedTokenWithdrawerStewardTest {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
 
-        tokenId = withdrawer.requestWithdrawStMatic(amount);
+        withdrawer.startWithdrawStMatic(amount);
         vm.stopPrank();
     }
 

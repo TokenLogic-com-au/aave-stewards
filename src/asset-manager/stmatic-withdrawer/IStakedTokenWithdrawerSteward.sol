@@ -8,50 +8,42 @@ pragma solidity ^0.8.13;
 interface IStakedTokenWithdrawerSteward {
     /**
      * @dev Emitted when a new Withdrawal is requested
-     * @param amount The amount requested to be withdrawn
-     * @param tokenId The tokenId of NFT to handle claim tokens
+     * @param token The address of token
+     * @param amounts The amounts requested to be withdrawn
+     * @param index the storage index of the respective requestIds used to finalize the withdrawal
      */
     event StartedWithdrawal(
         address indexed token,
-        uint256 amount,
-        uint256 indexed tokenId
+        uint256[] amounts,
+        uint256 indexed index
     );
 
     /**
      * @dev Emitted when a new Withdrawal is requested
+     * @param token The address of token
      * @param amount The withdrawn amount to collector
-     * @param tokenId The tokenId of NFT to handle claim tokens
+     * @param index The storage index of the respective requestIds used to finalize the withdrawal
      */
     event FinalizedWithdrawal(
         address indexed token,
         uint256 amount,
-        uint256 indexed tokenId
+        uint256 indexed index
     );
 
-    /// @dev Reverts when balance of withdrawer insufficient
-    error InsufficientBalance();
-
-    /// @dev Reverts when input invalid not owned tokenId
-    error InvalidOwner();
+    /// @dev Reverts if withdraw request is invalid
+    error InvalidRequest();
 
     /**
-     * @dev Return address of StMatic contract
-     * @return The address of StMatic contract
-     */
-    function ST_MATIC() external view returns (address);
-
-    /**
-     * @dev Sends withdraw request to stMatic contract
+     * @dev Starts a new withdrawal on stMatic
      * @param amount The amount to be withdrawn. this amount should be deposited withdrawer before this action
-     * @return tokenId The id of IPoLido NFT
      */
-    function requestWithdrawStMatic(
-        uint256 amount
-    ) external returns (uint256 tokenId);
+    function startWithdrawStMatic(uint256 amount) external;
 
-    /**
-     * @dev Claim MATIC from stMatic contract
-     * @param tokenId The id of IPoLido NFT
-     */
-    function finalizeWithdrawStMatic(uint256 tokenId) external;
+    /// @notice Starts a new withdrawal on wstEth
+    /// @param amounts a list of amounts to be withdrawn. each amount must be > 100 wei and < 1000 ETH
+    function startWithdrawWstEth(uint256[] calldata amounts) external;
+
+    /// @notice Finalizes a withdrawal
+    /// @param index The index of the withdrawal request data of the withdrawal to be finalized
+    function finalizeWithdraw(uint256 index) external;
 }

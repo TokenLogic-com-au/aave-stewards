@@ -120,6 +120,10 @@ contract StakedTokenWithdrawerSteward is
         emit FinalizedWithdrawal(request.token, amount, index);
     }
 
+    /**
+     * @dev Finalize withdrawal of stMatic
+     * @param requestId The id of request
+     */
     function _finalizeWithdrawStMatic(
         uint256 requestId
     ) internal returns (uint256 amount) {
@@ -133,6 +137,10 @@ contract StakedTokenWithdrawerSteward is
         token.transfer(address(AaveV3Ethereum.COLLECTOR), amount);
     }
 
+    /**
+     * @dev Finalize withdrawal of wstEth
+     * @param requestIds The ids of request on withdrawal queue
+     */
     function _finalizeWithdrawWstEth(
         uint256[] memory requestIds
     ) internal onlyOwnerOrGuardian returns (uint256 amount) {

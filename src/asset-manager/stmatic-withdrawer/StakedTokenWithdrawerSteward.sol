@@ -21,6 +21,13 @@ import {IWithdrawalQueueERC721} from "./interfaces/IWithdrawalQueueERC721.sol";
  * @author TokenLogic
  * @notice This contract facilitates withdrawals of stMATIC and wstETH tokens through the Lido staking mechanism
  * and transfers the withdrawn funds to the Aave V3 Collector contract.
+ * @dev This contract is owned and controlled by Aave Governance.
+ * @custom:Security Considerations:
+ * - Only the contract owner or guardian can request withdrawals.
+ * - Ensures proper ownership verification before finalizing withdrawals.
+ * - Transfers funds directly to the Aave V3 Collector, reducing the risk of misuse.
+ * - Uses SafeERC20 to mitigate risks associated with ERC20 token transfers.
+ * - Rescue functions allow recovery of mistakenly sent assets.
  */
 contract StakedTokenWithdrawerSteward is
     OwnableWithGuardian,

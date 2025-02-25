@@ -32,7 +32,12 @@ contract StakedTokenWithdrawerStewardTest is Test {
 
     StakedTokenWithdrawerSteward public withdrawer;
 
-    event StartedWithdrawal(
+    event StartedStMaticWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed tokenId
+    );
+    event StartedWstEthWithdrawal(
         address indexed token,
         uint256[] amounts,
         uint256 indexed tokenId
@@ -79,11 +84,10 @@ contract StMaticStartWithdrawTest is StakedTokenWithdrawerStewardTest {
     function test_success() public {
         vm.startPrank(GUARDIAN);
         deal(ST_MATIC, address(withdrawer), amount);
+        uint256 nextIndex = withdrawer.nextIndex();
 
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = amount;
         vm.expectEmit(true, true, false, true, address(withdrawer));
-        emit StartedWithdrawal(ST_MATIC, amounts, 0);
+        emit StartedStMaticWithdrawal(ST_MATIC, amount, nextIndex);
         withdrawer.startWithdrawStMatic(amount);
 
         uint256 amountAfter = IERC20(ST_MATIC).balanceOf(address(withdrawer));
@@ -179,7 +183,7 @@ contract WstEthStartWithdrawTest is StakedTokenWithdrawerStewardTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         vm.expectEmit(address(withdrawer));
-        emit StartedWithdrawal(WSTETH, amounts, nextIndex);
+        emit StartedWstEthWithdrawal(WSTETH, amounts, nextIndex);
         withdrawer.startWithdrawWstEth(amounts);
         vm.stopPrank();
 
@@ -208,7 +212,7 @@ contract WstEthStartWithdrawTest is StakedTokenWithdrawerStewardTest {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = amount;
         vm.expectEmit(address(withdrawer));
-        emit StartedWithdrawal(WSTETH, amounts, nextIndex);
+        emit StartedWstEthWithdrawal(WSTETH, amounts, nextIndex);
         vm.prank(GUARDIAN);
         withdrawer.startWithdrawWstEth(amounts);
 
@@ -388,17 +392,11 @@ contract UpdateGuardian is StakedTokenWithdrawerStewardTest {
 contract EmergencyTokenTransfer is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
 
-    function test_revertsIf_invalidCaller() public {
-        deal(ST_MATIC, address(withdrawer), amount);
-        vm.expectRevert(IRescuable.OnlyRescueGuardian.selector);
-        withdrawer.emergencyTokenTransfer(ST_MATIC, COLLECTOR, amount);
-    }
-
-    function test_successful_governanceCaller() public {
+    function test_successful() public {
         uint256 initialCollectorBalance = IERC20(ST_MATIC).balanceOf(COLLECTOR);
         deal(ST_MATIC, address(withdrawer), amount);
         vm.startPrank(OWNER);
-        withdrawer.emergencyTokenTransfer(ST_MATIC, COLLECTOR, amount);
+        withdrawer.emergencyTokenTransfer(ST_MATIC, amount);
         vm.stopPrank();
 
         assertEq(
@@ -427,7 +425,12 @@ contract Emergency721TokenTransfer is StakedTokenWithdrawerStewardTest {
     }
 
     function test_revertsIf_invalidCaller() public {
-        vm.expectRevert(IRescuable.OnlyRescueGuardian.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector,
+                address(this)
+            )
+        );
         withdrawer.emergency721TokenTransfer(
             address(poLidoNFT),
             COLLECTOR,

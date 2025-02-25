@@ -7,12 +7,24 @@ pragma solidity ^0.8.13;
  */
 interface IStakedTokenWithdrawerSteward {
     /**
-     * @dev Emitted when a new withdrawal is initiated.
+     * @dev Emitted when a new StMatic withdrawal is initiated.
+     * @param token The address of the token being withdrawn.
+     * @param amount The amounts requested to be withdrawn.
+     * @param index The storage index of the respective request IDs used to finalize the withdrawal.
+     */
+    event StartedStMaticWithdrawal(
+        address indexed token,
+        uint256 amount,
+        uint256 indexed index
+    );
+
+    /**
+     * @dev Emitted when a new WstEth withdrawal is initiated.
      * @param token The address of the token being withdrawn.
      * @param amounts The amounts requested to be withdrawn.
      * @param index The storage index of the respective request IDs used to finalize the withdrawal.
      */
-    event StartedWithdrawal(
+    event StartedWstEthWithdrawal(
         address indexed token,
         uint256[] amounts,
         uint256 indexed index

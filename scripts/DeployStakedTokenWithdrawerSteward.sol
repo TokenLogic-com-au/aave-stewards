@@ -7,7 +7,6 @@ import {StakedTokenWithdrawerSteward} from "src/asset-manager/stmatic-withdrawer
 
 contract DeployEthereum is EthereumScript {
     function run() external broadcast {
-        bytes32 salt = "StakedToken Withdrawer Steward";
-        new StakedTokenWithdrawerSteward{salt: salt}();
+        new StakedTokenWithdrawerSteward();
     }
 }

@@ -5,7 +5,8 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
-import {Rescuable721, Rescuable} from "solidity-utils/contracts/utils/Rescuable721.sol";
+import {IRescuable721} from "solidity-utils/contracts/utils/interfaces/IRescuable721.sol";
+import {PermissionlessRescuable, IPermissionlessRescuable} from "solidity-utils/contracts/utils/PermissionlessRescuable.sol";
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
@@ -22,7 +23,6 @@ import {IWithdrawalQueueERC721} from "./interfaces/IWithdrawalQueueERC721.sol";
  * @notice This contract facilitates withdrawals of stMATIC and wstETH tokens through the Lido staking mechanism
  * and transfers the withdrawn funds to the Aave V3 Collector contract.
  * @dev This contract is owned and controlled by Aave Governance.
- * @custom:Security Considerations:
  * - Only the contract owner or guardian can request withdrawals.
  * - Ensures proper ownership verification before finalizing withdrawals.
  * - Transfers funds directly to the Aave V3 Collector, reducing the risk of misuse.
@@ -30,12 +30,19 @@ import {IWithdrawalQueueERC721} from "./interfaces/IWithdrawalQueueERC721.sol";
  * - Rescue functions allow recovery of mistakenly sent assets.
  */
 contract StakedTokenWithdrawerSteward is
+    IStakedTokenWithdrawerSteward,
+    IRescuable721,
     OwnableWithGuardian,
-    Rescuable721,
-    IStakedTokenWithdrawerSteward
+    PermissionlessRescuable
 {
     using SafeERC20 for IERC20;
 
+    /**
+     * @notice Represents a request to withdraw tokens.
+     * @dev This struct stores the token address and an array of associated request IDs.
+     * @param token The address of the token to be withdrawn. It can be StMatic or WstEth
+     * @param requestIds An array of request IDs corresponding to the withdrawal requests.
+     */
     struct WithdrawRequest {
         address token;
         uint256[] requestIds;
@@ -43,6 +50,7 @@ contract StakedTokenWithdrawerSteward is
 
     /// @dev Auto incrementing index to store requestIds of withdrawals
     uint256 public nextIndex;
+    /// @dev Minimum check point to reduce gas when get hints from WstEthWithdrawalQueue
     uint256 public minCheckpointIndex;
 
     /// @dev Stores withdraw request
@@ -85,10 +93,8 @@ contract StakedTokenWithdrawerSteward is
             token: ST_MATIC,
             requestIds: requestIds
         });
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = amount;
 
-        emit StartedWithdrawal(ST_MATIC, amounts, index);
+        emit StartedStMaticWithdrawal(ST_MATIC, amount, index);
     }
 
     /// @inheritdoc IStakedTokenWithdrawerSteward
@@ -96,14 +102,15 @@ contract StakedTokenWithdrawerSteward is
         uint256[] calldata amounts
     ) external onlyOwnerOrGuardian {
         uint256 index = nextIndex++;
-        uint256[] memory rIds = IWithdrawalQueueERC721(WSTETH_WITHDRAWAL_QUEUE)
-            .requestWithdrawalsWstETH(amounts, address(this));
+        uint256[] memory requestIds = IWithdrawalQueueERC721(
+            WSTETH_WITHDRAWAL_QUEUE
+        ).requestWithdrawalsWstETH(amounts, address(this));
 
         requests[index] = WithdrawRequest({
             token: AaveV3EthereumAssets.wstETH_UNDERLYING,
-            requestIds: rIds
+            requestIds: requestIds
         });
-        emit StartedWithdrawal(
+        emit StartedWstEthWithdrawal(
             AaveV3EthereumAssets.wstETH_UNDERLYING,
             amounts,
             index
@@ -176,16 +183,27 @@ contract StakedTokenWithdrawerSteward is
         );
     }
 
-    /// @inheritdoc Rescuable
-    function whoCanRescue() public view override returns (address) {
-        return owner();
-    }
-
     /// @inheritdoc IRescuableBase
     function maxRescue(
-        address
-    ) public pure override(RescuableBase, IRescuableBase) returns (uint256) {
+        address erc20Token
+    ) public view override(IRescuableBase, RescuableBase) returns (uint256) {
         return type(uint256).max;
+    }
+
+    /// @inheritdoc IPermissionlessRescuable
+    function whoShouldReceiveFunds() public view override returns (address) {
+        return address(AaveV3Ethereum.COLLECTOR);
+    }
+
+    /// @inheritdoc IRescuable721
+    function emergency721TokenTransfer(
+        address erc721Token,
+        address to,
+        uint256 tokenId
+    ) external override onlyOwnerOrGuardian {
+        IERC721(erc721Token).transferFrom(address(this), to, tokenId);
+
+        emit ERC721Rescued(msg.sender, erc721Token, to, tokenId);
     }
 
     fallback() external payable {}

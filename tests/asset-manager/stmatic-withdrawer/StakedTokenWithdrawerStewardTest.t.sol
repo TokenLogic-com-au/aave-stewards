@@ -8,12 +8,13 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
-import {StakedTokenWithdrawerSteward, IStakedTokenWithdrawerSteward, IStMatic, IWithdrawalQueueERC721} from "src/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerSteward.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
 import {IRescuable} from "solidity-utils/contracts/utils/interfaces/IRescuable.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
+
+import {StakedTokenWithdrawerSteward, IStakedTokenWithdrawerSteward, IStMatic, IWithdrawalQueueERC721} from "src/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerSteward.sol";
 
 interface IStakeManager {
     function setCurrentEpoch(uint256 _currentEpoch) external;
@@ -80,6 +81,19 @@ contract StakedTokenWithdrawerStewardTest is Test {
 
 contract StMaticStartWithdrawTest is StakedTokenWithdrawerStewardTest {
     uint256 amount = 1_000e18;
+
+    function test_revertsIf_invalidCaller() public {
+        deal(ST_MATIC, address(withdrawer), amount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector,
+                address(this)
+            )
+        );
+        withdrawer.startWithdrawStMatic(amount);
+        vm.stopPrank();
+    }
 
     function test_success() public {
         vm.startPrank(GUARDIAN);

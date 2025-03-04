@@ -140,15 +140,17 @@ contract StakedTokenWithdrawerSteward is
      */
     function _finalizeWithdrawStMatic(
         uint256 requestId
-    ) internal returns (uint256 amount) {
+    ) internal returns (uint256) {
         IERC721 poLidoNft = IERC721(IStMatic(ST_MATIC).poLidoNFT());
         poLidoNft.approve(ST_MATIC, requestId);
         IStMatic(ST_MATIC).claimTokens(requestId);
 
         IERC20 token = IERC20(IStMatic(ST_MATIC).token());
 
-        amount = token.balanceOf(address(this));
+        uint256 amount = token.balanceOf(address(this));
         token.transfer(address(AaveV3Ethereum.COLLECTOR), amount);
+
+        return amount;
     }
 
     /**
@@ -157,7 +159,7 @@ contract StakedTokenWithdrawerSteward is
      */
     function _finalizeWithdrawWstEth(
         uint256[] memory requestIds
-    ) internal onlyOwnerOrGuardian returns (uint256 amount) {
+    ) internal onlyOwnerOrGuardian returns (uint256) {
         uint256[] memory hintIds = IWithdrawalQueueERC721(
             WSTETH_WITHDRAWAL_QUEUE
         ).findCheckpointHints(
@@ -173,7 +175,7 @@ contract StakedTokenWithdrawerSteward is
             address(this)
         );
 
-        amount = address(this).balance;
+        uint256 amount = address(this).balance;
 
         IWETH(AaveV3EthereumAssets.WETH_UNDERLYING).deposit{value: amount}();
 
@@ -181,6 +183,8 @@ contract StakedTokenWithdrawerSteward is
             address(AaveV3Ethereum.COLLECTOR),
             amount
         );
+
+        return amount;
     }
 
     /// @inheritdoc IRescuableBase
@@ -205,8 +209,6 @@ contract StakedTokenWithdrawerSteward is
 
         emit ERC721Rescued(msg.sender, erc721Token, to, tokenId);
     }
-
-    fallback() external payable {}
 
     receive() external payable {}
 }

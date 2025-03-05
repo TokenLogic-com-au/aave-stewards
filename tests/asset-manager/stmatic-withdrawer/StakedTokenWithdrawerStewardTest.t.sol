@@ -10,7 +10,6 @@ import {IERC721} from "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
-import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
 import {IRescuable} from "solidity-utils/contracts/utils/interfaces/IRescuable.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
 
@@ -23,7 +22,9 @@ interface IStakeManager {
 /// @dev forge test --match-path=tests/asset-manager/stmatic-withdrawer/StakedTokenWithdrawerStewardTest.t.sol -vv
 contract StakedTokenWithdrawerStewardTest is Test {
     address public constant OWNER = GovernanceV3Ethereum.EXECUTOR_LVL_1;
-    address public constant GUARDIAN = MiscEthereum.PROTOCOL_GUARDIAN;
+    /// https://etherscan.io/address/0x22740deBa78d5a0c24C58C740e3715ec29de1bFa
+    address public constant GUARDIAN =
+        0x22740deBa78d5a0c24C58C740e3715ec29de1bFa;
     address public constant COLLECTOR = address(AaveV3Ethereum.COLLECTOR);
     address public constant WETH = AaveV3EthereumAssets.WETH_UNDERLYING;
     address public constant WSTETH = AaveV3EthereumAssets.wstETH_UNDERLYING;

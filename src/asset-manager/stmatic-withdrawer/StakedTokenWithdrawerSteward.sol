@@ -10,7 +10,6 @@ import {PermissionlessRescuable, IPermissionlessRescuable} from "solidity-utils/
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
-import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
 
 import {IStakedTokenWithdrawerSteward} from "./IStakedTokenWithdrawerSteward.sol";
 import {IStMatic} from "./interfaces/IStMatic.sol";
@@ -56,6 +55,10 @@ contract StakedTokenWithdrawerSteward is
     /// @dev Stores withdraw request
     mapping(uint256 => WithdrawRequest) public requests;
 
+    /// https://etherscan.io/address/0x22740deBa78d5a0c24C58C740e3715ec29de1bFa
+    address public constant GUARDIAN =
+        0x22740deBa78d5a0c24C58C740e3715ec29de1bFa;
+
     /// https://etherscan.io/address/0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1
     address public constant WSTETH_WITHDRAWAL_QUEUE =
         0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1;
@@ -65,10 +68,7 @@ contract StakedTokenWithdrawerSteward is
         0x9ee91F9f426fA633d227f7a9b000E28b9dfd8599;
 
     constructor()
-        OwnableWithGuardian(
-            GovernanceV3Ethereum.EXECUTOR_LVL_1,
-            MiscEthereum.PROTOCOL_GUARDIAN
-        )
+        OwnableWithGuardian(GovernanceV3Ethereum.EXECUTOR_LVL_1, GUARDIAN)
     {
         IERC20(ST_MATIC).approve(ST_MATIC, type(uint256).max);
         IERC20(AaveV3EthereumAssets.wstETH_UNDERLYING).approve(

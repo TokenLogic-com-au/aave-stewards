@@ -8,7 +8,6 @@ import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/Resc
 import {ChainIds} from "solidity-utils/contracts/utils/ChainHelpers.sol";
 
 import {MiscArbitrum} from "aave-address-book/MiscArbitrum.sol";
-import {MiscBase} from "aave-address-book/MiscBase.sol";
 import {MiscOptimism} from "aave-address-book/MiscOptimism.sol";
 import {MiscPolygon} from "aave-address-book/MiscPolygon.sol";
 import {IAavePolEthERC20Bridge} from "aave-helpers/src/bridges/polygon/IAavePolEthERC20Bridge.sol";

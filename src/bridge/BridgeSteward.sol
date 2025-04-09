@@ -6,6 +6,7 @@ import {ICollector} from "aave-helpers/src/CollectorUtils.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
 import {ChainIds} from "solidity-utils/contracts/utils/ChainHelpers.sol";
+import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
 
 import {MiscArbitrum} from "aave-address-book/MiscArbitrum.sol";
 import {MiscOptimism} from "aave-address-book/MiscOptimism.sol";
@@ -16,7 +17,30 @@ import {IAaveOpEthERC20Bridge} from "aave-helpers/src/bridges/optimism/IAaveOpEt
 
 import {IBridgeSteward} from "./interfaces/IBridgeSteward.sol";
 
-contract BridgeSteward is IBridgeSteward, OwnableWithGuardian, RescuableBase {
+/**
+ * @title BridgeSteward
+ * @author LucasWong (Tokenlogic)
+ * @notice Manages bridging token from L2 networks(Arbitrum, Optimism and Polygon) to Mainnet.
+ *
+ * The contract inherits from `Multicall`. Using the `multicall` function from this contract
+ * multiple operations can be bundled into a single transaction.
+ *
+ * -- Security Considerations
+ *
+ * -- Permissions
+ * The contract implements OwnableWithGuardian.
+ * The owner will always be the respective network Short Executor (governance).
+ * The guardian role will be given to a Financial Service provider of the DAO.
+ *
+ * While the permitted Service Provider will have full control over the funds, the allowed actions are limited by the contract itself.
+ * All token interactions start and end on the Collector, so no funds ever leave the DAO possession at any point in time.
+ */
+contract BridgeSteward is
+    IBridgeSteward,
+    OwnableWithGuardian,
+    RescuableBase,
+    Multicall
+{
     /// @inheritdoc IBridgeSteward
     ICollector public immutable COLLECTOR;
 

@@ -277,3 +277,137 @@ contract WithdrawOnOptimismTest is BridgeStewardTestBase {
         vm.stopPrank();
     }
 }
+
+contract EmergencyTokenTransfer is BridgeStewardTestBase {
+    function setUp() public override {
+        super.setUp();
+
+        vm.createSelectFork(vm.rpcUrl("polygon"), 70057084);
+        steward = new BridgeSteward(
+            owner,
+            guardian,
+            address(AaveV3Polygon.COLLECTOR)
+        );
+    }
+
+    function test_successful_permissionless() public {
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            0
+        );
+
+        uint256 aaveAmount = 1_000e18;
+
+        deal(AaveV3PolygonAssets.AAVE_UNDERLYING, address(steward), aaveAmount);
+
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            aaveAmount
+        );
+
+        uint256 initialCollectorAaveBalance = IERC20(
+            AaveV3PolygonAssets.AAVE_UNDERLYING
+        ).balanceOf(address(AaveV3Polygon.COLLECTOR));
+
+        steward.rescueToken(AaveV3PolygonAssets.AAVE_UNDERLYING);
+
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(AaveV3Polygon.COLLECTOR)
+            ),
+            initialCollectorAaveBalance + aaveAmount
+        );
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            0
+        );
+    }
+
+    function test_successful_governanceCaller() public {
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            0
+        );
+
+        uint256 aaveAmount = 1_000e18;
+
+        deal(AaveV3PolygonAssets.AAVE_UNDERLYING, address(steward), aaveAmount);
+
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            aaveAmount
+        );
+
+        uint256 initialCollectorAaveBalance = IERC20(
+            AaveV3PolygonAssets.AAVE_UNDERLYING
+        ).balanceOf(address(AaveV3Polygon.COLLECTOR));
+
+        vm.startPrank(owner);
+        steward.rescueToken(AaveV3PolygonAssets.AAVE_UNDERLYING);
+        vm.stopPrank();
+
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(AaveV3Polygon.COLLECTOR)
+            ),
+            initialCollectorAaveBalance + aaveAmount
+        );
+        assertEq(
+            IERC20(AaveV3PolygonAssets.AAVE_UNDERLYING).balanceOf(
+                address(steward)
+            ),
+            0
+        );
+    }
+
+    function test_rescueEth() public {
+        uint256 mintAmount = 1_000_000e18;
+        deal(address(steward), mintAmount);
+
+        uint256 collectorBalanceBefore = address(AaveV3Polygon.COLLECTOR)
+            .balance;
+
+        steward.rescueEth();
+
+        uint256 collectorBalanceAfter = address(AaveV3Polygon.COLLECTOR)
+            .balance;
+
+        assertEq(collectorBalanceAfter - collectorBalanceBefore, mintAmount);
+        assertEq(address(steward).balance, 0);
+    }
+}
+
+contract MaxRescue is BridgeStewardTestBase {
+    function setUp() public override {
+        super.setUp();
+
+        vm.createSelectFork(vm.rpcUrl("polygon"), 70057084);
+        steward = new BridgeSteward(
+            owner,
+            guardian,
+            address(AaveV3Polygon.COLLECTOR)
+        );
+    }
+
+    function test_maxRescue() public {
+        assertEq(steward.maxRescue(AaveV3PolygonAssets.USDC_UNDERLYING), 0);
+
+        uint256 mintAmount = 1_000_000e18;
+        deal(AaveV3PolygonAssets.USDC_UNDERLYING, address(steward), mintAmount);
+
+        assertEq(
+            steward.maxRescue(AaveV3PolygonAssets.USDC_UNDERLYING),
+            mintAmount
+        );
+    }
+}

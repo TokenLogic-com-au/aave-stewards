@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
 import {ICollector, CollectorUtils as CU} from "aave-helpers/src/CollectorUtils.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
 import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
@@ -10,30 +11,35 @@ import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/Resc
 import {ChainIds} from "solidity-utils/contracts/utils/ChainHelpers.sol";
 
 import {IERC20Polygon} from "./interfaces/IERC20Polygon.sol";
+import {IERC20PredicateBurnOnly} from "./interfaces/IERC20PredicateBurnOnly.sol";
 import {IRootChainManager} from "./interfaces/IRootChainManager.sol";
+import {IWithdrawManager} from "./interfaces/IWithdrawManager.sol";
+import {IWPol} from "./interfaces/IWPol.sol";
 import {IPolEthERC20BridgeSteward} from "./interfaces/IPolEthERC20BridgeSteward.sol";
 
 /**
- * @title PoolExposureSteward
+ * @title PolEthERC20BridgeSteward
  * @author efecarranza  (Tokenlogic)
- * @notice Manages deposits, withdrawals, and asset migrations between Aave V2 and Aave V3 assets held in the Collector.
+ * @notice Bridges funds held in Polygon's Collector to Mainnet's Collector.
  *
  * The contract inherits from `Multicall`. Using the `multicall` function from this contract
  * multiple operations can be bundled into a single transaction.
  *
  * -- Security Considerations
  *
- * -- Pools
- * The pools managed by the steward are allowListed.
- * As v2 pools are deprecated, the steward only implements withdrawals from v2.
+ * The owner or guardian can bridge all funds from Polygon's Collector to Mainnet.
+ * If the POL token is migrated (as it happened on September 4th, 2024 from MATIC to POL) then the tokens can get stuck until rescued.
+ * The function `bridgePol()` must never be called via `multicall` as Polygon rate-limits bridges by the number of events emitted in
+ * a single transaction. `bridgePol()` must always be called alone and ensuring that the number of events in the trasaction is less than 10,
+ * even counting the events emitted to transfer from the Collector to the bridge contract.
  *
  * -- Permissions
  * The contract implements OwnableWithGuardian.
- * The owner will always be the respective network Short Executor (governance).
+ * The owner will always be the respective network Level 1 Executor (governance).
  * The guardian role will be given to a Financial Service provider of the DAO.
  *
  * While the permitted Service Provider will have full control over the funds, the allowed actions are limited by the contract itself.
- * All token interactions start and end on the Collector, so no funds ever leave the DAO possession at any point in time.
+ * All token interactions start and end on the Collector, so no funds ever leave the DAO's possession at any point in time.
  */
 contract PolEthERC20BridgeSteward is
     IPolEthERC20BridgeSteward,
@@ -44,8 +50,25 @@ contract PolEthERC20BridgeSteward is
     using SafeERC20 for IERC20;
 
     /// @inheritdoc IPolEthERC20BridgeSteward
+    address public constant ERC20_PREDICATE_BURN =
+        0x158d5fa3Ef8e4dDA8a5367deCF76b94E7efFCe95;
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    address public constant WITHDRAW_MANAGER =
+        0x2A88696e0fFA76bAA1338F2C74497cC013495922;
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    address public constant POL_MAINNET =
+        0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6;
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    address public constant POL_POLYGON =
+        0x0000000000000000000000000000000000001010;
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
     address public immutable COLLECTOR;
 
+    /// @inheritdoc IPolEthERC20BridgeSteward
     address public _rootChainManager =
         0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
 
@@ -60,14 +83,15 @@ contract PolEthERC20BridgeSteward is
         COLLECTOR = collector;
     }
 
+    /// @dev Allows the contract to receive ETH on Mainnet and POL on Polygon
     receive() external payable {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
-
-        (bool success, ) = address(COLLECTOR).call{
-            value: address(this).balance
-        }("");
-        if (!success) {
-            emit FailedToSendETH();
+        if (block.chainid == ChainIds.MAINNET) {
+            (bool success, ) = address(COLLECTOR).call{
+                value: address(this).balance
+            }("");
+            if (!success) {
+                emit FailedToSendETH();
+            }
         }
     }
 
@@ -83,6 +107,18 @@ contract PolEthERC20BridgeSteward is
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
+    function bridgePol(uint256 amount, bool unwrap) external onlyOwner {
+        if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+
+        if (unwrap) {
+            IWPol(AaveV3PolygonAssets.WPOL_UNDERLYING).withdraw(amount);
+        }
+
+        IERC20Polygon(POL_POLYGON).withdraw{value: amount}(amount);
+        emit Bridge(POL_POLYGON, amount);
+    }
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
     function exit(address token, bytes calldata burnProof) external {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
@@ -91,6 +127,27 @@ contract PolEthERC20BridgeSteward is
 
         IERC20(token).safeTransfer(COLLECTOR, balance);
         emit WithdrawToCollector(token, balance);
+    }
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    function confirmPolExit(bytes calldata burnProof) external {
+        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+
+        IERC20PredicateBurnOnly(ERC20_PREDICATE_BURN).startExitWithBurntTokens(
+            burnProof
+        );
+        emit ConfirmExit(burnProof);
+    }
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    function exitPol() external {
+        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+
+        IWithdrawManager(WITHDRAW_MANAGER).processExits(POL_MAINNET);
+        uint256 balance = IERC20(POL_MAINNET).balanceOf(address(this));
+
+        IERC20(POL_MAINNET).safeTransfer(COLLECTOR, balance);
+        emit WithdrawToCollector(POL_MAINNET, balance);
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward

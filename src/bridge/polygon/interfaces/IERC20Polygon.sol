@@ -6,5 +6,5 @@ interface IERC20Polygon {
 
     function transfer(address to, uint256 amount) external returns (bool);
 
-    function withdraw(uint256 amount) external;
+    function withdraw(uint256 amount) external payable;
 }

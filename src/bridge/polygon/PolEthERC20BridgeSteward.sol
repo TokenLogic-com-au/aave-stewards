@@ -139,6 +139,13 @@ contract PolEthERC20BridgeSteward is
         emit ConfirmExit(burnProof);
     }
 
+    function exitEth(bytes calldata burnProof) external {
+        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+
+        IRootChainManager(_rootChainManager).exit(burnProof);
+        // emit WithdrawToCollector(token, balance);
+    }
+
     /// @inheritdoc IPolEthERC20BridgeSteward
     function exitPol() external {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();

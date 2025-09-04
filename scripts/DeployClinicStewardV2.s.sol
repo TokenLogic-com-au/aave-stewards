@@ -32,20 +32,20 @@ contract Deploy is Script {
     vm.startBroadcast();
     if (block.chainid == ChainIds.MAINNET) {
       DeploymentLibrary._deploy(
-        AaveV2Ethereum.POOL, AaveV2Ethereum.COLLECTOR, GovernanceV3Ethereum.EXECUTOR_LVL_1, 30_000e8
+        AaveV2Ethereum.POOL, AaveV2Ethereum.COLLECTOR, GovernanceV3Ethereum.EXECUTOR_LVL_1, 1_000_000e8
       );
       DeploymentLibrary._deploy(
-        AaveV2EthereumAMM.POOL, AaveV2EthereumAMM.COLLECTOR, GovernanceV3Ethereum.EXECUTOR_LVL_1, 5_000e8
+        AaveV2EthereumAMM.POOL, AaveV2EthereumAMM.COLLECTOR, GovernanceV3Ethereum.EXECUTOR_LVL_1, 1_000e8
       );
     }
     if (block.chainid == ChainIds.POLYGON) {
       DeploymentLibrary._deploy(
-        AaveV2Polygon.POOL, AaveV2Polygon.COLLECTOR, GovernanceV3Polygon.EXECUTOR_LVL_1, 30_000e8
+        AaveV2Polygon.POOL, AaveV2Polygon.COLLECTOR, GovernanceV3Polygon.EXECUTOR_LVL_1, 5_000e8
       );
     }
     if (block.chainid == ChainIds.AVALANCHE) {
       DeploymentLibrary._deploy(
-        AaveV2Avalanche.POOL, AaveV2Avalanche.COLLECTOR, GovernanceV3Avalanche.EXECUTOR_LVL_1, 350_000e8
+        AaveV2Avalanche.POOL, AaveV2Avalanche.COLLECTOR, GovernanceV3Avalanche.EXECUTOR_LVL_1, 2_500e8
       );
     }
   }

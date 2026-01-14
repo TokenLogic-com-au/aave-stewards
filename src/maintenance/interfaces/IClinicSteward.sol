@@ -13,6 +13,9 @@ interface IClinicSteward is IRescuableBase, IAccessControl {
   /// @notice Thrown when passed address is zero
   error ZeroAddress();
 
+  /// @notice Thrown when the price of an asset is not available
+  error ZeroOraclePrice();
+
   /// @notice Thrown when an attempt is made to pull more funds (in dollar value) than the available budget allows.
   /// @param asset The asset being pulled.
   /// @param assetAmount The amount of the asset being pulled.
@@ -32,7 +35,7 @@ interface IClinicSteward is IRescuableBase, IAccessControl {
   /// @notice The role that allows to call the `batchLiquidate` and `batchRepayBadDebt` functions
   function CLEANUP_ROLE() external view returns (bytes32);
 
-  /// @notice The Aave pool
+  /// @notice The Aave Pool, which can be an Aave V2 or V3 pool instance.
   function POOL() external view returns (IPool);
 
   /// @notice The Aave collector
@@ -50,7 +53,7 @@ interface IClinicSteward is IRescuableBase, IAccessControl {
   /// @param debtAsset The address of the debt asset
   /// @param collateralAsset The address of the collateral asset that will be liquidated
   /// @param users The addresses of the users to liquidate
-  /// @param useATokens If true the token will pull aTokens from the collector.
+  /// @param useATokens If true the steward will pull aTokens from the collector.
   ///                   If false it will pull the underlying.
   function batchLiquidate(address debtAsset, address collateralAsset, address[] memory users, bool useATokens) external;
 
@@ -60,7 +63,7 @@ interface IClinicSteward is IRescuableBase, IAccessControl {
   ///      any surplus back to the collector.
   /// @param asset The address of an asset to repay
   /// @param users The addresses of users to repay
-  /// @param useATokens If true the token will pull aTokens from the collector.
+  /// @param useATokens If true the steward will pull aTokens from the collector.
   ///                   If false it will pull the underlying.
   function batchRepayBadDebt(address asset, address[] calldata users, bool useATokens) external;
 
@@ -75,7 +78,7 @@ interface IClinicSteward is IRescuableBase, IAccessControl {
   /// @notice Rescues the ETH
   function rescueEth() external;
 
-  /// @notice Infinite approves an asset to the pool
+  /// @notice Renews the approval for a specific asset to the Aave Pool, granting the maximum possible allowance.
   function renewAllowance(address asset) external;
 
   /* EXTERNAL VIEW FUNCTIONS */

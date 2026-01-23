@@ -10,6 +10,9 @@ interface IPolEthERC20BridgeSteward {
     /// @dev Function cannot be called on this network
     error InvalidChain();
 
+    /// @dev Provided address cannot be the zero-address
+    error InvalidZeroAddress();
+
     /// @notice Emitted when ETH cannot be sent to the Collector
     event FailedToSendETH();
 
@@ -75,6 +78,9 @@ interface IPolEthERC20BridgeSteward {
     /// @notice Sets the RootChainManager
     /// @param rootChainManager Address of the Polygon Root Chain Manager on Mainnet
     function setRootChainManager(address rootChainManager) external;
+
+    /// @notice Returns ETH mock address in order to withdraw ether accordingly on Mainnet
+    function ETH_MOCK_ADDRESS() external view returns (address);
 
     /// @notice Returns instance of Aave V3 Collector
     function COLLECTOR() external view returns (address);

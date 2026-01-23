@@ -50,6 +50,10 @@ contract PolEthERC20BridgeSteward is
     using SafeERC20 for IERC20;
 
     /// @inheritdoc IPolEthERC20BridgeSteward
+    address public constant ETH_MOCK_ADDRESS =
+        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
     address public constant ERC20_PREDICATE_BURN =
         0x158d5fa3Ef8e4dDA8a5367deCF76b94E7efFCe95;
 
@@ -80,20 +84,13 @@ contract PolEthERC20BridgeSteward is
         address initialGuardian,
         address collector
     ) OwnableWithGuardian(initialOwner, initialGuardian) {
+        if (initialGuardian == address(0)) revert InvalidZeroAddress();
+        if (collector == address(0)) revert InvalidZeroAddress();
         COLLECTOR = collector;
     }
 
     /// @dev Allows the contract to receive ETH on Mainnet and POL on Polygon
-    receive() external payable {
-        if (block.chainid == ChainIds.MAINNET) {
-            (bool success, ) = address(COLLECTOR).call{
-                value: address(this).balance
-            }("");
-            if (!success) {
-                emit FailedToSendETH();
-            }
-        }
-    }
+    receive() external payable {}
 
     /// @inheritdoc IPolEthERC20BridgeSteward
     function bridge(
@@ -107,7 +104,10 @@ contract PolEthERC20BridgeSteward is
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    function bridgePol(uint256 amount, bool unwrap) external onlyOwner {
+    function bridgePol(
+        uint256 amount,
+        bool unwrap
+    ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
 
         if (unwrap) {
@@ -123,27 +123,21 @@ contract PolEthERC20BridgeSteward is
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
         IRootChainManager(_rootChainManager).exit(burnProof);
-        uint256 balance = IERC20(token).balanceOf(address(this));
 
-        IERC20(token).safeTransfer(COLLECTOR, balance);
-        emit WithdrawToCollector(token, balance);
-    }
+        if (address(token) == ETH_MOCK_ADDRESS) {
+            uint256 balance = address(this).balance;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function confirmPolExit(bytes calldata burnProof) external {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+            (bool success, ) = address(COLLECTOR).call{value: balance}("");
+            if (!success) {
+                emit FailedToSendETH();
+            }
+            emit WithdrawToCollector(token, address(this).balance);
+        } else {
+            uint256 balance = IERC20(token).balanceOf(address(this));
 
-        IERC20PredicateBurnOnly(ERC20_PREDICATE_BURN).startExitWithBurntTokens(
-            burnProof
-        );
-        emit ConfirmExit(burnProof);
-    }
-
-    function exitEth(bytes calldata burnProof) external {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
-
-        IRootChainManager(_rootChainManager).exit(burnProof);
-        // emit WithdrawToCollector(token, balance);
+            IERC20(token).safeTransfer(COLLECTOR, balance);
+            emit WithdrawToCollector(token, balance);
+        }
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
@@ -158,12 +152,22 @@ contract PolEthERC20BridgeSteward is
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    function rescueToken(address token) external {
+    function confirmPolExit(bytes calldata burnProof) external {
+        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+
+        IERC20PredicateBurnOnly(ERC20_PREDICATE_BURN).startExitWithBurntTokens(
+            burnProof
+        );
+        emit ConfirmExit(burnProof);
+    }
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    function rescueToken(address token) external onlyOwnerOrGuardian {
         _emergencyTokenTransfer(token, COLLECTOR, type(uint256).max);
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    function rescueEth() external {
+    function rescueEth() external onlyOwnerOrGuardian {
         _emergencyEtherTransfer(COLLECTOR, address(this).balance);
     }
 
@@ -177,6 +181,7 @@ contract PolEthERC20BridgeSteward is
     /// @inheritdoc IPolEthERC20BridgeSteward
     function setRootChainManager(address rootChainManager) external onlyOwner {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+        if (rootChainManager == address(0)) revert InvalidZeroAddress();
 
         address oldRootChainManager = _rootChainManager;
         _rootChainManager = rootChainManager;

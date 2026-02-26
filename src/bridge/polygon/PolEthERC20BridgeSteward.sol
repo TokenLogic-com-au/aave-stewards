@@ -9,6 +9,7 @@ import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/Ownab
 import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
 import {ChainIds} from "solidity-utils/contracts/utils/ChainHelpers.sol";
+import {ICollector} from "aave-v3-origin/contracts/treasury/ICollector.sol";
 
 import {IERC20Polygon} from "./interfaces/IERC20Polygon.sol";
 import {IERC20PredicateBurnOnly} from "./interfaces/IERC20PredicateBurnOnly.sol";
@@ -76,6 +77,9 @@ contract PolEthERC20BridgeSteward is
     address public _rootChainManager =
         0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
 
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    mapping(address token => bool isAllowed) public allowedTokens;
+
     /// @param initialOwner The owner of the contract upon deployment
     /// @param initialGuardian The guardian of the contract upon deployment
     /// @param collector The address of the Aave Collector on the deployed chain
@@ -98,6 +102,9 @@ contract PolEthERC20BridgeSteward is
         uint256 amount
     ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+        if (!allowedTokens[token]) revert TokenNotAllowed();
+
+        ICollector(COLLECTOR).transfer(IERC20(token), address(this), amount);
 
         IERC20Polygon(token).withdraw(amount);
         emit Bridge(token, amount);
@@ -109,9 +116,22 @@ contract PolEthERC20BridgeSteward is
         bool unwrap
     ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+        if (!allowedTokens[AaveV3PolygonAssets.WPOL_UNDERLYING])
+            revert TokenNotAllowed();
 
         if (unwrap) {
+            ICollector(COLLECTOR).transfer(
+                IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING),
+                address(this),
+                amount
+            );
             IWPol(AaveV3PolygonAssets.WPOL_UNDERLYING).withdraw(amount);
+        } else {
+            ICollector(COLLECTOR).transfer(
+                IERC20(ICollector(COLLECTOR).ETH_MOCK_ADDRESS()),
+                address(this),
+                amount
+            );
         }
 
         IERC20Polygon(POL_POLYGON).withdraw{value: amount}(amount);
@@ -172,6 +192,16 @@ contract PolEthERC20BridgeSteward is
     /// @inheritdoc IPolEthERC20BridgeSteward
     function rescueEth() external onlyOwnerOrGuardian {
         _emergencyEtherTransfer(COLLECTOR, address(this).balance);
+    }
+
+    /// @inheritdoc IPolEthERC20BridgeSteward
+    function setTokenAllowed(address token, bool allowed) external onlyOwner {
+        if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+        if (token == address(0)) revert InvalidZeroAddress();
+
+        allowedTokens[token] = allowed;
+
+        emit SetTokenAllowed(token, allowed);
     }
 
     /// @inheritdoc IRescuableBase

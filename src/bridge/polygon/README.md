@@ -43,7 +43,7 @@ Callable on Polygon to withdraw ERC20 token. It withdraws `amount` of passed `to
 
 `function bridgePol(uint256 amount, bool unwrap) external`
 
-Callable on Polygon to withdraw POL token. It withdraws `amount` of POL to mainnet.
+Callable on Polygon to withdraw POL token. It withdraws `amount` of POL to mainnet. WPOL address must be allowed as a token that is bridgeable.
 
 `function exit(address token, bytes calldata burnProof) external;`
 
@@ -57,9 +57,17 @@ Callable on Mainnet (Step 2 of 3) to confirm a withdrawl of POL. Callable 30-90 
 
 Callable on Mainnet (Step 3 of 3) to perform actual withdrawl of POL to the Collector. Callable after check-point time passes.
 
-`function emergencyTokenTransfer(address erc20Token, address to, uint256 amount) external;`
+`function rescueToken(address erc20Token) external;`
 
-Callable on Polygon. Withdraws tokens from bridge contract back to Aave Collector on Polygon.
+Callable on Polygon. Withdraws tokens from bridge contract back to Aave Collector.
+
+`function rescueEth() external;`
+
+Callable on Polygon. Withdraws native token from bridge contract back to Aave Collector.
+
+`function setTokenAllowed(address token, bool allowed)`
+
+Callable on Polygon. Sets a token as allowed/disallowed to be bridged.
 
 `receive() external payable;`
 

@@ -7,6 +7,7 @@ import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessCon
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
 import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
+import {GovernanceV3Polygon} from "aave-address-book/GovernanceV3Polygon.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {AaveV3Polygon, AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
@@ -29,6 +30,7 @@ contract PolEthERC20BridgeStewardTest is Test {
         address rootChainManager,
         address oldRootChainManager
     );
+    event SetTokenAllowed(address indexed token, bool allowed);
 
     PolEthERC20BridgeSteward bridgeMainnet;
     PolEthERC20BridgeSteward bridgePolygon;
@@ -54,6 +56,13 @@ contract PolEthERC20BridgeStewardTest is Test {
             GUARDIAN,
             address(AaveV3Polygon.COLLECTOR)
         );
+
+        vm.startPrank(GovernanceV3Polygon.EXECUTOR_LVL_1);
+        IAccessControl(address(AaveV3Polygon.COLLECTOR)).grantRole(
+            bytes32("FUNDS_ADMIN"),
+            address(bridgePolygon)
+        );
+        vm.stopPrank();
     }
 }
 
@@ -259,6 +268,55 @@ contract IsTokenMapped is PolEthERC20BridgeStewardTest {
     }
 }
 
+contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
+    function test_revertsIf_notOwner() public {
+        vm.startPrank(GUARDIAN);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Ownable.OwnableUnauthorizedAccount.selector,
+                GUARDIAN
+            )
+        );
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.USDC_UNDERLYING,
+            true
+        );
+        vm.stopPrank();
+    }
+
+    function test_revertsIf_invalidZeroAddress() public {
+        vm.selectFork(polygonFork);
+        vm.startPrank(OWNER);
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAddress.selector);
+        bridgePolygon.setTokenAllowed(address(0), true);
+        vm.stopPrank();
+    }
+
+    function test_revertsIf_invalidChain() public {
+        vm.selectFork(mainnetFork);
+        vm.startPrank(OWNER);
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidChain.selector);
+        bridgeMainnet.setTokenAllowed(
+            AaveV3EthereumAssets.USDC_UNDERLYING,
+            true
+        );
+        vm.stopPrank();
+    }
+
+    function test_successful() public {
+        vm.selectFork(polygonFork);
+        vm.startPrank(OWNER);
+
+        vm.expectEmit(true, true, true, true, address(bridgePolygon));
+        emit SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.USDC_UNDERLYING,
+            true
+        );
+    }
+}
+
 contract BridgeTest is PolEthERC20BridgeStewardTest {
     function test_revertsIf_invalidChain() public {
         vm.selectFork(mainnetFork);
@@ -271,21 +329,13 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
 
     function test_revertsIf_invalidCaller() public {
         vm.selectFork(polygonFork);
-
-        uint256 amount = 1_000e6;
-        deal(
-            AaveV3PolygonAssets.USDC_UNDERLYING,
-            address(bridgePolygon),
-            amount
-        );
-
         vm.expectRevert(
             abi.encodeWithSelector(
                 IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector,
                 address(this)
             )
         );
-        bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
+        bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, 1_000e6);
     }
 
     function test_successful() public {
@@ -293,20 +343,18 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
 
         uint256 amount = 1_000e6;
 
-        deal(
-            AaveV3PolygonAssets.USDC_UNDERLYING,
-            address(bridgePolygon),
-            amount
-        );
-
         assertEq(
             IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(
                 address(bridgePolygon)
             ),
-            amount
+            0
         );
 
         vm.startPrank(OWNER);
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.USDC_UNDERLYING,
+            true
+        );
         vm.expectEmit(true, true, true, true, address(bridgePolygon));
         emit Bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
         bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
@@ -347,11 +395,13 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
 
         uint256 amount = 1_000e6;
 
-        deal(address(bridgePolygon), amount);
-
-        assertEq(address(bridgePolygon).balance, amount);
+        assertEq(address(bridgePolygon).balance, 0);
 
         vm.startPrank(OWNER);
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.WPOL_UNDERLYING,
+            true
+        );
         vm.expectEmit();
         emit Bridge(bridgePolygon.POL_POLYGON(), amount);
         bridgePolygon.bridgePol(amount, false);
@@ -365,20 +415,18 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
 
         uint256 amount = 1_000e6;
 
-        deal(
-            AaveV3PolygonAssets.WPOL_UNDERLYING,
-            address(bridgePolygon),
-            amount
-        );
-
         assertEq(
             IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(
                 address(bridgePolygon)
             ),
-            amount
+            0
         );
 
         vm.startPrank(OWNER);
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.WPOL_UNDERLYING,
+            true
+        );
         vm.expectEmit();
         emit Bridge(bridgePolygon.POL_POLYGON(), amount);
         bridgePolygon.bridgePol(amount, true);

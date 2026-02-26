@@ -10,13 +10,14 @@ interface IPolEthERC20BridgeSteward {
     /// @dev Function cannot be called on this network
     error InvalidChain();
 
-    error InvalidMulticall();
-
     /// @dev Provided address cannot be the zero-address
     error InvalidZeroAddress();
 
     /// @dev Could not withdraw ETH to the Collector
     error FailedToSendETH();
+
+    /// @dev Token has not been approved for bridging
+    error TokenNotAllowed();
 
     /// @notice Emitted when an ERC20 token is bridged from Polygon
     /// @param token Address of the ERC20 token on Polygon
@@ -33,6 +34,11 @@ interface IPolEthERC20BridgeSteward {
         address rootChainManager,
         address oldRootChainManager
     );
+
+    /// @notice Emitted when a token is approved/disapproved for bridging
+    /// @param token Address of the token to bridge
+    /// @param allowed Whether it is allowed/disallowed
+    event SetTokenAllowed(address indexed token, bool allowed);
 
     /// @notice Emitted when an ERC20 token is withdrawn from Mainnet bridge to the Collector
     /// @param token Address of the ERC20 token on Mainnet
@@ -79,6 +85,12 @@ interface IPolEthERC20BridgeSteward {
     /// @notice Rescues ETH from the contract back to the Collector
     function rescueEth() external;
 
+    /// @notice Sets a token to allowed/disallowed for bridging
+    /// @dev Only callable on Polygon.
+    /// @param token Address of the token to set status for
+    /// @param allowed Whether token is allowed/disallowed
+    function setTokenAllowed(address token, bool allowed) external;
+
     /// @notice Sets the RootChainManager
     /// @param rootChainManager Address of the Polygon Root Chain Manager on Mainnet
     function setRootChainManager(address rootChainManager) external;
@@ -89,8 +101,11 @@ interface IPolEthERC20BridgeSteward {
     /// @notice Returns instance of Aave V3 Collector
     function COLLECTOR() external view returns (address);
 
-    /// Returns the address of the Mainnet contract to exit the burn from
+    /// @notice Returns the address of the Mainnet contract to exit the burn from
     function _rootChainManager() external view returns (address);
+
+    /// @notice Returns whether a token can be bridged
+    function allowedTokens(address token) external view returns (bool);
 
     /// @dev The mainnet address of the Predicate contract to confirm withdrawal
     function ERC20_PREDICATE_BURN() external view returns (address);

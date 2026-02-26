@@ -10,16 +10,18 @@ interface IPolEthERC20BridgeSteward {
     /// @dev Function cannot be called on this network
     error InvalidChain();
 
+    error InvalidMulticall();
+
     /// @dev Provided address cannot be the zero-address
     error InvalidZeroAddress();
 
-    /// @notice Emitted when ETH cannot be sent to the Collector
-    event FailedToSendETH();
+    /// @dev Could not withdraw ETH to the Collector
+    error FailedToSendETH();
 
     /// @notice Emitted when an ERC20 token is bridged from Polygon
     /// @param token Address of the ERC20 token on Polygon
     /// @param amount The amount of ERC20 token to bridge
-    event Bridge(address token, uint256 amount);
+    event Bridge(address indexed token, uint256 amount);
 
     /// @dev Emitted when the bridge transaction is confirmed
     event ConfirmExit(bytes proof);
@@ -35,7 +37,7 @@ interface IPolEthERC20BridgeSteward {
     /// @notice Emitted when an ERC20 token is withdrawn from Mainnet bridge to the Collector
     /// @param token Address of the ERC20 token on Mainnet
     /// @param amount The amount of ERC20 token to transfer
-    event WithdrawToCollector(address token, uint256 amount);
+    event WithdrawToCollector(address indexed token, uint256 amount);
 
     /// This function withdraws an ERC20 token from Polygon to Mainnet. exit() needs
     /// to be called on mainnet with the corresponding burnProof in order to complete.
@@ -44,8 +46,9 @@ interface IPolEthERC20BridgeSteward {
     /// @param amount Amount of tokens to withdraw
     function bridge(address token, uint256 amount) external;
 
-    /// This function withdraws POL from Polygon to Mainnet. exit() needs
-    /// to be called on Mainnet with the corresponding burnProof in order to complete.
+    /// This function withdraws POL from Polygon to Mainnet. confirmPolExit() needs
+    /// to be called on Mainnet with the corresponding burnProof in order to confirm withdrawal.
+    /// Then exitPol() needs to be called to do actual withdrawal of tokens.
     /// @notice Polygon only. Function will revert if called from other network.
     /// @param amount Amount of tokens to withdraw
     /// @param unwrap Whether to unwrap wPOL into POL prior to bridging
@@ -54,6 +57,7 @@ interface IPolEthERC20BridgeSteward {
     /// This function completes the withdrawal process from Polygon to Mainnet.
     /// Burn proof is generated via API. Please see README.md
     /// @notice Mainnet only. Function will revert if called from other network.
+    /// Use ETH_MOCK_ADDRESS to withdraw ETH.
     /// @param token Mainnet address of ERC20 token to withdraw
     /// @param burnProof Burn proof generated via API
     function exit(address token, bytes calldata burnProof) external;

@@ -119,7 +119,10 @@ contract PolEthERC20BridgeSteward is
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    function exit(address token, bytes calldata burnProof) external {
+    function exit(
+        address token,
+        bytes calldata burnProof
+    ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
         IRootChainManager(_rootChainManager).exit(burnProof);
@@ -129,9 +132,9 @@ contract PolEthERC20BridgeSteward is
 
             (bool success, ) = address(COLLECTOR).call{value: balance}("");
             if (!success) {
-                emit FailedToSendETH();
+                revert FailedToSendETH();
             }
-            emit WithdrawToCollector(token, address(this).balance);
+            emit WithdrawToCollector(token, balance);
         } else {
             uint256 balance = IERC20(token).balanceOf(address(this));
 

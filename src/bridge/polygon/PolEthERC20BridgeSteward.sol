@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
-import {ICollector, CollectorUtils as CU} from "aave-helpers/src/CollectorUtils.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
 import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
@@ -30,9 +29,9 @@ import {IPolEthERC20BridgeSteward} from "./interfaces/IPolEthERC20BridgeSteward.
  *
  * The owner or guardian can bridge all funds from Polygon's Collector to Mainnet.
  * If the POL token is migrated (as it happened on September 4th, 2024 from MATIC to POL) then the tokens can get stuck until rescued.
- * The function `bridgePol()` must never be called via `multicall` as Polygon rate-limits bridges by the number of events emitted in
- * a single transaction. `bridgePol()` must always be called alone and ensuring that the number of events in the trasaction is less than 10,
- * even counting the events emitted to transfer from the Collector to the bridge contract.
+ * The function `bridgePol()` must never be called via `multicall` or bunbled with other `bridge() transactions as Polygon rate-limits
+ * bridges by the number of events emitted in a single transaction. `bridgePol()` must always be called alone and ensuring that the
+ * number of events in the trasaction is less than 10, even counting the events emitted to transfer from the Collector to the bridge contract.
  *
  * -- Permissions
  * The contract implements OwnableWithGuardian.

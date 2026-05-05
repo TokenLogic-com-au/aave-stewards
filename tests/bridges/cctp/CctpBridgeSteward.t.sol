@@ -16,7 +16,7 @@ import {ITokenMessengerV2} from 'src/bridges/cctp/interfaces/ITokenMessengerV2.s
 import {IMessageTransmitterV2} from 'src/bridges/cctp/interfaces/IMessageTransmitterV2.sol';
 import {CctpConstants} from 'src/bridges/cctp/CctpConstants.sol';
 
-contract CctpBridgeStewardForkTestBase is Test {
+contract CctpBridgeStewardTestBase is Test {
   CctpBridgeSteward public bridge;
   IERC20 public usdc = new ERC20Mock();
   address public tokenMessenger = makeAddr('tokenMessenger');
@@ -64,7 +64,7 @@ contract CctpBridgeStewardForkTestBase is Test {
     _fundCollector(AMOUNT);
   }
 
-  function _bridge(uint256 maxFee, ICctpBridgeSteward.TransferSpeed speed) internal {
+  function _bridge(address caller, uint256 maxFee, ICctpBridgeSteward.TransferSpeed speed) internal {
     uint256 collectorBalanceBefore = usdc.balanceOf(collector);
 
     vm.expectEmit();
@@ -76,7 +76,7 @@ contract CctpBridgeStewardForkTestBase is Test {
       speed
     );
 
-    vm.prank(owner);
+    vm.prank(caller);
     bridge.bridge(AMOUNT, maxFee, speed);
 
     assertEq(usdc.balanceOf(address(bridge)), 0, 'Bridge should have no USDC left');
@@ -88,7 +88,7 @@ contract CctpBridgeStewardForkTestBase is Test {
   }
 }
 
-contract BridgeFailuresTest is CctpBridgeStewardForkTestBase {
+contract BridgeFailuresTest is CctpBridgeStewardTestBase {
   function test_revertsIf_callerNotOwnerOrGuardian() public {
     vm.startPrank(alice);
     vm.expectRevert(
@@ -114,7 +114,41 @@ contract BridgeFailuresTest is CctpBridgeStewardForkTestBase {
   }
 }
 
-contract BridgeTest is CctpBridgeStewardForkTestBase {
+abstract contract BridgeBaseTest is CctpBridgeStewardTestBase {
+  function test_bridge_fast_owner() public {
+    _bridge(
+      owner,
+      AMOUNT / 100,
+      ICctpBridgeSteward.TransferSpeed.Fast
+    );
+  }
+
+  function test_bridge_fast_guardian() public {
+    _bridge(
+      guardian,
+      AMOUNT / 100,
+      ICctpBridgeSteward.TransferSpeed.Fast
+    );
+  }
+
+  function test_bridge_standard_owner() public {
+    _bridge(
+      owner,
+      0,
+      ICctpBridgeSteward.TransferSpeed.Standard
+    );
+  }
+
+  function test_bridge_standard_guardian() public {
+    _bridge(
+      guardian,
+      0,
+      ICctpBridgeSteward.TransferSpeed.Standard
+    );
+  }
+}
+
+contract BridgeArbitrumTest is BridgeBaseTest {
   function setUp() public override {
     string memory rpcUrl = vm.envOr('RPC_ARBITRUM', string(''));
     vm.createSelectFork(rpcUrl);
@@ -130,50 +164,9 @@ contract BridgeTest is CctpBridgeStewardForkTestBase {
     vm.prank(AaveV3Arbitrum.ACL_ADMIN);
     IAccessControl(collector).grantRole(fundsAdminRole, address(bridge));
   }
-
-  function test_bridge_fast() public {
-    _bridge(
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-  }
-
-  function test_bridge_fast_guardian() public {
-    uint256 collectorBalanceBefore = usdc.balanceOf(collector);
-
-    vm.expectEmit();
-    emit ICctpBridgeSteward.Bridge(
-      address(usdc),
-      CctpConstants.ETHEREUM_DOMAIN,
-      receiver,
-      AMOUNT,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-
-    vm.prank(guardian);
-    bridge.bridge(
-      AMOUNT,
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-
-    assertEq(usdc.balanceOf(address(bridge)), 0, 'Bridge should have no USDC left');
-    assertEq(
-      usdc.balanceOf(collector),
-      collectorBalanceBefore - AMOUNT,
-      'Collector should transfer USDC'
-    );
-  }
-
-  function test_bridge_standard() public {
-    _bridge(
-      0,
-      ICctpBridgeSteward.TransferSpeed.Standard
-    );
-  }
 }
 
-contract ConstructorTest is CctpBridgeStewardForkTestBase {
+contract ConstructorTest is CctpBridgeStewardTestBase {
   function test_revertsIf_constructorTokenMessengerZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
     new CctpBridgeSteward(
@@ -235,7 +228,7 @@ contract ConstructorTest is CctpBridgeStewardForkTestBase {
   }
 }
 
-contract RescuableTest is CctpBridgeStewardForkTestBase {
+contract RescuableTest is CctpBridgeStewardTestBase {
   function test_rescueToken_guardian() public {
     deal(address(usdc), address(bridge), AMOUNT);
 

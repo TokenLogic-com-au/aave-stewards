@@ -40,6 +40,9 @@ interface ICctpBridgeSteward {
   /// @dev maxFee is greater than or equal to the amount being bridged, which is invalid
   error InvalidMaxFee(uint256 maxFee, uint256 amount);
 
+  /// @dev TransferSpeed value is not a recognised member of the enum
+  error InvalidTransferSpeed();
+
   /// @notice Bridges USDC to a destination chain using CCTP V2
   /// @param amount The amount of USDC to bridge, denominated in USDC with 6 decimals, 1 USDC = 1_000_000
   /// @param maxFee Maximum fee willing to pay for a Fast Transfer, denominated in USDC with 6 decimals, 1 USDC = 1_000_000
@@ -74,6 +77,8 @@ interface ICctpBridgeSteward {
   function RECEIVER() external view returns (address);
 
   /// @notice Returns the local CCTP domain identifier
+  /// @dev Captured at deploy time from the (upgradeable) TokenMessengerV2 / MessageTransmitterV2.
+  ///      A redeploy is required if Circle migrates these contracts and the local domain changes.
   /// @return The domain ID for this chain
   function LOCAL_DOMAIN() external view returns (uint32);
 }

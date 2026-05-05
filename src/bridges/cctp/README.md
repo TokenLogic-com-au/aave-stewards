@@ -4,11 +4,11 @@ The AaveCctpBridge is a contract to facilitate bridging USDC across chains using
 
 ## Features
 
-- Bridge USDC to any CCTP V2 supported destination chain
+- Bridge USDC from a supported source chain back to the Aave Mainnet Collector via CCTP V2
 - Support for both Fast and Standard transfer speeds
 - Steward access model (`owner` + `guardian`) for operational execution
 - Bridges pull USDC from a pre-configured source `COLLECTOR`
-- Destination receivers (EVM and non-EVM) must be explicitly allowlisted by owner
+- Bridges always send to a single immutable `RECEIVER` (the Mainnet Collector) on the Ethereum domain — both are set at deploy time and cannot be changed
 
 ## Transfer Speeds
 
@@ -69,8 +69,7 @@ Note: the API returns a fee _rate_ (`minimumFee` in bps), not a precomputed abso
 The contract implements `OwnableWithGuardian` for permissioned functions.
 The owner is expected to be the respective network's Level 1 Executor (Governance), while the guardian provides an operational backup path.
 
-`bridge()` and `bridgeNonEvm()` can be called by `owner` or `guardian`.
-Allowed receivers can only be configured by `owner`.
+`bridge()` can be called by `owner` or `guardian`. The destination domain and receiver are immutable — there are no setters.
 
 ## Security Considerations
 
@@ -79,7 +78,7 @@ Both rescue methods always transfer assets back to `COLLECTOR` (not arbitrary re
 
 ## CCTP Domain IDs
 
-Domain IDs are defined by Circle's CCTP. The complete list can be found in the [CCTP documentation](https://developers.circle.com/cctp/cctp-supported-blockchains).
+Domain IDs are defined by Circle's CCTP. The complete list can be found in the [CCTP documentation](https://developers.circle.com/cctp/cctp-supported-blockchains). Only the Ethereum (destination) and source-chain domains are operationally relevant for this steward; the rest of the table below is for reference.
 
 | Network   | Domain ID |
 | --------- | --------- |
@@ -100,32 +99,21 @@ Domain IDs are defined by Circle's CCTP. The complete list can be found in the [
 
 ```solidity
 function bridge(
-  uint32 destinationDomain,
   uint256 amount,
-  address receiver,
-  uint256 maxFee,
-  TransferSpeed speed
-) external onlyOwnerOrGuardian;
-
-function bridgeNonEvm(
-  uint32 destinationDomain,
-  uint256 amount,
-  bytes32 receiver,
   uint256 maxFee,
   TransferSpeed speed
 ) external onlyOwnerOrGuardian;
 ```
 
-Bridges USDC to a destination chain. The bridge contract pulls USDC from the source-chain `COLLECTOR` via `ICollector.transfer`, so the bridge must hold the Collector `FUNDS_ADMIN` role. The caller provides a destination receiver per transfer.
-Receivers must be allowlisted (`setAllowedReceiver` for EVM and `setAllowedReceiverNonEVM` for non-EVM).
+Bridges USDC to the immutable `RECEIVER` on the Ethereum domain. The bridge contract pulls USDC from the source-chain `COLLECTOR` via `ICollector.transfer`, so the bridge must hold the Collector `FUNDS_ADMIN` role. Destination domain (`DESTINATION_DOMAIN`) and recipient (`RECEIVER`) are set at construction and cannot be changed — to bridge to a different destination, deploy a new instance.
 
 Parameters:
 
-- `destinationDomain`: The CCTP domain ID of the destination chain
 - `amount`: Amount of USDC to bridge (must be > 0)
-- `receiver`: Destination recipient (EVM address for `bridge`, bytes32 identifier for `bridgeNonEvm`)
-- `maxFee`: Maximum fee in USDC for Fast transfers
+- `maxFee`: Maximum fee in USDC for Fast transfers (must be < `amount`)
 - `speed`: `TransferSpeed.Fast` or `TransferSpeed.Standard`
+
+Note: `LOCAL_DOMAIN` is read once at deploy time from Circle's (upgradeable) `TokenMessengerV2` / `MessageTransmitterV2`. If Circle ever migrates those contracts and the local domain changes, this steward must be redeployed.
 
 ## Contract Addresses
 

@@ -121,6 +121,34 @@ contract BridgeFailuresTest is CctpBridgeStewardTestBase {
 }
 
 contract ConstructorTest is CctpBridgeStewardTestBase {
+  function test_immutables() public view {
+    assertEq(bridge.TOKEN_MESSENGER(), tokenMessenger, 'TOKEN_MESSENGER mismatch');
+    assertEq(bridge.USDC(), address(usdc), 'USDC mismatch');
+    assertEq(bridge.COLLECTOR(), collector, 'COLLECTOR mismatch');
+    assertEq(bridge.RECEIVER(), receiver, 'RECEIVER mismatch');
+    assertEq(bridge.LOCAL_DOMAIN(), CctpConstants.ARBITRUM_DOMAIN, 'LOCAL_DOMAIN mismatch');
+    assertEq(bridge.DESTINATION_DOMAIN(), CctpConstants.ETHEREUM_DOMAIN, 'DESTINATION_DOMAIN mismatch');
+    assertEq(bridge.owner(), owner, 'owner mismatch');
+    assertEq(bridge.guardian(), guardian, 'guardian mismatch');
+  }
+
+  function test_revertsIf_localDomainEqualsDestination() public {
+    address localMessageTransmitter = makeAddr('localMessageTransmitter');
+    vm.mockCall(
+      tokenMessenger,
+      abi.encodeCall(ITokenMessengerV2.localMessageTransmitter, ()),
+      abi.encode(localMessageTransmitter)
+    );
+    vm.mockCall(
+      localMessageTransmitter,
+      abi.encodeCall(IMessageTransmitterV2.localDomain, ()),
+      abi.encode(CctpConstants.ETHEREUM_DOMAIN)
+    );
+
+    vm.expectRevert(ICctpBridgeSteward.InvalidLocalDomain.selector);
+    new CctpBridgeSteward(tokenMessenger, address(usdc), owner, guardian, collector, receiver);
+  }
+
   function test_revertsIf_constructorTokenMessengerZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
     new CctpBridgeSteward(
@@ -211,6 +239,43 @@ contract RescuableTest is CctpBridgeStewardTestBase {
     );
   }
 
+  function test_rescueToken_owner() public {
+    deal(address(usdc), address(bridge), AMOUNT);
+
+    uint256 collectorBalanceBefore = usdc.balanceOf(collector);
+
+    vm.prank(owner);
+    bridge.rescueToken(address(usdc));
+
+    assertEq(usdc.balanceOf(address(bridge)), 0, 'Rescue bridge should have no USDC left');
+    assertEq(
+      usdc.balanceOf(collector),
+      collectorBalanceBefore + AMOUNT,
+      'Collector should receive rescued USDC'
+    );
+  }
+
+  function test_rescueToken_nonUsdc() public {
+    IERC20 other = new ERC20Mock();
+    deal(address(other), address(bridge), AMOUNT);
+
+    vm.prank(owner);
+    bridge.rescueToken(address(other));
+
+    assertEq(other.balanceOf(address(bridge)), 0, 'Bridge should have no token left');
+    assertEq(other.balanceOf(collector), AMOUNT, 'Collector should receive rescued token');
+  }
+
+  function test_rescueToken_revertsIf_notOwnerOrGuardian() public {
+    deal(address(usdc), address(bridge), AMOUNT);
+
+    vm.prank(alice);
+    vm.expectRevert(
+      abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, alice)
+    );
+    bridge.rescueToken(address(usdc));
+  }
+
   function test_sendEthToBridge_reverts() public {
     vm.deal(address(this), 1 ether);
     vm.expectRevert(ICctpBridgeSteward.CannotReceiveEther.selector);
@@ -234,6 +299,33 @@ contract RescuableTest is CctpBridgeStewardTestBase {
       collectorBalanceBefore + rescueAmount,
       'Collector should receive rescued ETH'
     );
+  }
+
+  function test_rescueEth_guardian() public {
+    uint256 rescueAmount = 1 ether;
+    vm.deal(address(bridge), rescueAmount);
+
+    uint256 collectorBalanceBefore = collector.balance;
+
+    vm.prank(guardian);
+    bridge.rescueEth();
+
+    assertEq(address(bridge).balance, 0, 'Bridge should have no ETH left');
+    assertEq(
+      collector.balance,
+      collectorBalanceBefore + rescueAmount,
+      'Collector should receive rescued ETH'
+    );
+  }
+
+  function test_rescueEth_revertsIf_notOwnerOrGuardian() public {
+    vm.deal(address(bridge), 1 ether);
+
+    vm.prank(alice);
+    vm.expectRevert(
+      abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, alice)
+    );
+    bridge.rescueEth();
   }
 
   function test_maxRescue_returnsFullBalance() public {

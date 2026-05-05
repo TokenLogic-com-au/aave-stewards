@@ -34,6 +34,8 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
   address public immutable RECEIVER;
 
   /// @inheritdoc ICctpBridgeSteward
+  /// @dev Captured at deploy time from the (upgradeable) TokenMessengerV2 / MessageTransmitterV2.
+  ///      A redeploy is required if Circle migrates these contracts and the local domain changes.
   uint32 public immutable LOCAL_DOMAIN;
 
   /// @param tokenMessenger The TokenMessengerV2 address on this chain
@@ -41,6 +43,7 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
   /// @param owner The owner of the contract upon deployment
   /// @param guardian The initial guardian of the contract upon deployment
   /// @param collector The address of the source collector on this chain
+  /// @param receiver The address of the destination receiver (Mainnet collector) for bridge transfers
   constructor(
     address tokenMessenger,
     address usdc,
@@ -79,9 +82,14 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
     if (amount == 0) revert InvalidZeroAmount();
     if (maxFee >= amount) revert InvalidMaxFee(maxFee, amount);
 
-    uint32 finalityThreshold = speed == TransferSpeed.Fast
-      ? CctpConstants.FAST_FINALITY_THRESHOLD
-      : CctpConstants.STANDARD_FINALITY_THRESHOLD;
+    uint32 finalityThreshold;
+    if (speed == TransferSpeed.Fast) {
+      finalityThreshold = CctpConstants.FAST_FINALITY_THRESHOLD;
+    } else if (speed == TransferSpeed.Standard) {
+      finalityThreshold = CctpConstants.STANDARD_FINALITY_THRESHOLD;
+    } else {
+      revert InvalidTransferSpeed();
+    }
 
     ICollector(COLLECTOR).transfer(IERC20(USDC), address(this), amount);
     IERC20(USDC).forceApprove(TOKEN_MESSENGER, amount);
@@ -95,6 +103,9 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
       maxFee,
       finalityThreshold
     );
+
+    // Clear the allowance to prevent any potential issues down the line.
+    IERC20(USDC).forceApprove(TOKEN_MESSENGER, 0);
 
     emit Bridge(USDC, DESTINATION_DOMAIN, RECEIVER, amount, speed);
   }

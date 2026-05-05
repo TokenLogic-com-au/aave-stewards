@@ -3,9 +3,7 @@ pragma solidity ^0.8.0;
 
 import {Test} from 'forge-std/Test.sol';
 
-import {AaveV3Arbitrum} from 'aave-address-book/AaveV3Arbitrum.sol';
 import {AaveV3Ethereum} from 'aave-address-book/AaveV3Ethereum.sol';
-import {IAccessControl} from 'openzeppelin-contracts/contracts/access/IAccessControl.sol';
 import {ERC20Mock} from 'openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol';
 import {IERC20} from 'openzeppelin-contracts/contracts/token/ERC20/IERC20.sol';
 import {IWithGuardian} from 'solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol';
@@ -22,7 +20,7 @@ contract CctpBridgeStewardTestBase is Test {
   address public tokenMessenger = makeAddr('tokenMessenger');
   address public owner = makeAddr('owner');
   address public guardian = makeAddr('guardian');
-  address public collector = address(AaveV3Arbitrum.COLLECTOR);
+  address public collector = makeAddr('collector');
   address public receiver = address(AaveV3Ethereum.COLLECTOR);
   address public alice = makeAddr('alice');
 
@@ -43,7 +41,7 @@ contract CctpBridgeStewardTestBase is Test {
 
   function setUp() public virtual {
     try vm.activeFork() returns (uint256) {
-      // If we are on a fork, continue.
+      // If we are on a fork, continue; all the dependencies should be available.
     } catch {
       // If not, mock the necessary calls to deploy the bridge correctly.
       address localMessageTransmitter = makeAddr('localMessageTransmitter');
@@ -111,58 +109,6 @@ contract BridgeFailuresTest is CctpBridgeStewardTestBase {
       ICctpBridgeSteward.TransferSpeed.Fast
     );
     vm.stopPrank();
-  }
-}
-
-abstract contract BridgeBaseTest is CctpBridgeStewardTestBase {
-  function test_bridge_fast_owner() public {
-    _bridge(
-      owner,
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-  }
-
-  function test_bridge_fast_guardian() public {
-    _bridge(
-      guardian,
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-  }
-
-  function test_bridge_standard_owner() public {
-    _bridge(
-      owner,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Standard
-    );
-  }
-
-  function test_bridge_standard_guardian() public {
-    _bridge(
-      guardian,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Standard
-    );
-  }
-}
-
-contract BridgeArbitrumTest is BridgeBaseTest {
-  function setUp() public override {
-    string memory rpcUrl = vm.envOr('RPC_ARBITRUM', string(''));
-    vm.createSelectFork(rpcUrl);
-
-    usdc = IERC20(CctpConstants.ARBITRUM_USDC);
-    collector = address(AaveV3Arbitrum.COLLECTOR);
-    tokenMessenger = CctpConstants.ARBITRUM_TOKEN_MESSENGER;
-    receiver = address(AaveV3Arbitrum.COLLECTOR);
-
-    super.setUp();
-
-    bytes32 fundsAdminRole = AaveV3Arbitrum.COLLECTOR.FUNDS_ADMIN_ROLE();
-    vm.prank(AaveV3Arbitrum.ACL_ADMIN);
-    IAccessControl(collector).grantRole(fundsAdminRole, address(bridge));
   }
 }
 

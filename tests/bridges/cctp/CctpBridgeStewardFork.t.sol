@@ -17,35 +17,19 @@ import {CctpBridgeStewardTestBase} from './CctpBridgeSteward.t.sol';
 
 abstract contract BridgeTestBase is CctpBridgeStewardTestBase {
   function test_bridge_fast_owner() public {
-    _bridge(
-      owner,
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
+    _bridge(owner, AMOUNT / 100, ICctpBridgeSteward.TransferSpeed.Fast);
   }
 
   function test_bridge_fast_guardian() public {
-    _bridge(
-      guardian,
-      AMOUNT / 100,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
+    _bridge(guardian, AMOUNT / 100, ICctpBridgeSteward.TransferSpeed.Fast);
   }
 
   function test_bridge_standard_owner() public {
-    _bridge(
-      owner,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Standard
-    );
+    _bridge(owner, 0, ICctpBridgeSteward.TransferSpeed.Standard);
   }
 
   function test_bridge_standard_guardian() public {
-    _bridge(
-      guardian,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Standard
-    );
+    _bridge(guardian, 0, ICctpBridgeSteward.TransferSpeed.Standard);
   }
 }
 

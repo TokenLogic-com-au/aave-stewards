@@ -6,6 +6,7 @@ import {Test} from 'forge-std/Test.sol';
 import {AaveV3Ethereum} from 'aave-address-book/AaveV3Ethereum.sol';
 import {ERC20Mock} from 'openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol';
 import {IERC20} from 'openzeppelin-contracts/contracts/token/ERC20/IERC20.sol';
+import {Ownable} from 'openzeppelin-contracts/contracts/access/Ownable.sol';
 import {IWithGuardian} from 'solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol';
 
 import {CctpBridgeSteward} from 'src/bridges/cctp/CctpBridgeSteward.sol';
@@ -56,13 +57,16 @@ contract CctpBridgeStewardTestBase is Test {
         abi.encode(CctpConstants.ARBITRUM_DOMAIN)
       );
     }
-
     bridge = _deployBridge();
 
     _fundCollector(AMOUNT);
   }
 
-  function _bridge(address caller, uint256 maxFee, ICctpBridgeSteward.TransferSpeed speed) internal {
+  function _bridge(
+    address caller,
+    uint256 maxFee,
+    ICctpBridgeSteward.TransferSpeed speed
+  ) internal {
     uint256 collectorBalanceBefore = usdc.balanceOf(collector);
 
     vm.expectEmit();
@@ -83,32 +87,36 @@ contract CctpBridgeStewardTestBase is Test {
       collectorBalanceBefore - AMOUNT,
       'Collector should transfer USDC'
     );
+    assertEq(
+      usdc.allowance(address(bridge), tokenMessenger),
+      0,
+      'Bridge should have no USDC allowance for TokenMessenger'
+    );
   }
 }
 
 contract BridgeFailuresTest is CctpBridgeStewardTestBase {
   function test_revertsIf_callerNotOwnerOrGuardian() public {
-    vm.startPrank(alice);
+    vm.prank(alice);
     vm.expectRevert(
       abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, alice)
     );
-    bridge.bridge(
-      AMOUNT,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Fast
-    );
-    vm.stopPrank();
+    bridge.bridge(AMOUNT, 0, ICctpBridgeSteward.TransferSpeed.Fast);
   }
 
   function test_revertsIf_zeroAmount() public {
-    vm.startPrank(owner);
+    vm.prank(owner);
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAmount.selector);
-    bridge.bridge(
-      0,
-      0,
-      ICctpBridgeSteward.TransferSpeed.Fast
+    bridge.bridge(0, 0, ICctpBridgeSteward.TransferSpeed.Fast);
+  }
+
+  function test_revertsIf_maxFeeGteAmount() public {
+    uint256 maxFee = AMOUNT;
+    vm.prank(owner);
+    vm.expectRevert(
+      abi.encodeWithSelector(ICctpBridgeSteward.InvalidMaxFee.selector, maxFee, AMOUNT)
     );
-    vm.stopPrank();
+    bridge.bridge(AMOUNT, maxFee, ICctpBridgeSteward.TransferSpeed.Fast);
   }
 }
 
@@ -131,6 +139,18 @@ contract ConstructorTest is CctpBridgeStewardTestBase {
       CctpConstants.ETHEREUM_TOKEN_MESSENGER,
       address(0),
       owner,
+      guardian,
+      collector,
+      receiver
+    );
+  }
+
+  function test_revertsIf_constructorOwnerZero() public {
+    vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
+    new CctpBridgeSteward(
+      CctpConstants.ETHEREUM_TOKEN_MESSENGER,
+      CctpConstants.ETHEREUM_USDC,
+      address(0),
       guardian,
       collector,
       receiver

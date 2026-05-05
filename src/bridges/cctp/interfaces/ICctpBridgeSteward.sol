@@ -44,11 +44,7 @@ interface ICctpBridgeSteward {
   /// @param amount The amount of USDC to bridge, denominated in USDC with 6 decimals, 1 USDC = 1_000_000
   /// @param maxFee Maximum fee willing to pay for a Fast Transfer, denominated in USDC with 6 decimals, 1 USDC = 1_000_000
   /// @param speed Transfer speed (Fast or Standard)
-  function bridge(
-    uint256 amount,
-    uint256 maxFee,
-    TransferSpeed speed
-  ) external;
+  function bridge(uint256 amount, uint256 maxFee, TransferSpeed speed) external;
 
   /// @notice Rescues an ERC20 token balance to the source collector
   /// @param token The token address to rescue

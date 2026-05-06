@@ -2,19 +2,25 @@
 
 pragma solidity ^0.8.0;
 
-import {AaveV3Ethereum} from 'aave-address-book/AaveV3Ethereum.sol';
-import {AaveV3Arbitrum} from 'aave-address-book/AaveV3Arbitrum.sol';
-import {AaveV3Optimism} from 'aave-address-book/AaveV3Optimism.sol';
-import {AaveV3Polygon} from 'aave-address-book/AaveV3Polygon.sol';
-import {AaveV3Base} from 'aave-address-book/AaveV3Base.sol';
-import {ArbitrumScript, BaseScript, EthereumScript, OptimismScript, PolygonScript} from 'solidity-utils/contracts/utils/ScriptUtils.sol';
-import {CctpBridgeSteward} from 'src/bridges/cctp/CctpBridgeSteward.sol';
-import {CctpConstants} from 'src/bridges/cctp/CctpConstants.sol';
+import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
+import {AaveV3Arbitrum} from "aave-address-book/AaveV3Arbitrum.sol";
+import {AaveV3Optimism} from "aave-address-book/AaveV3Optimism.sol";
+import {AaveV3Polygon} from "aave-address-book/AaveV3Polygon.sol";
+import {AaveV3Base} from "aave-address-book/AaveV3Base.sol";
+import {
+  ArbitrumScript,
+  BaseScript,
+  EthereumScript,
+  OptimismScript,
+  PolygonScript
+} from "solidity-utils/contracts/utils/ScriptUtils.sol";
+import {CctpBridgeSteward} from "src/bridges/cctp/CctpBridgeSteward.sol";
+import {CctpConstants} from "src/bridges/cctp/CctpConstants.sol";
 
 address constant TOKEN_LOGIC = 0x3765A685a401622C060E5D700D9ad89413363a91;
 address constant GUARDIAN = 0x3765A685a401622C060E5D700D9ad89413363a91;
 address constant RECEIVER = address(AaveV3Ethereum.COLLECTOR);
-bytes32 constant SALT = 'Aave CCTP Bridge';
+bytes32 constant SALT = "Aave CCTP Bridge";
 
 contract DeployCctpBridgeArbitrum is ArbitrumScript {
   function run() external broadcast {

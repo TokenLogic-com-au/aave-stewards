@@ -25,23 +25,23 @@ interface ICctpBridgeSteward {
     TransferSpeed speed
   );
 
-  /// @dev Amount provided is zero
-  error InvalidZeroAmount();
-
-  /// @dev Constructor parameter is zero address
-  error InvalidZeroAddress();
+  /// @dev `receive` callback was called with non-zero ETH value, which is not supported
+  error CannotReceiveEther();
 
   /// @dev Contract was deployed to Ethereum mainnet, which does not require a bridge
   error InvalidLocalDomain();
-
-  /// @dev `receive` callback was called with non-zero ETH value, which is not supported
-  error CannotReceiveEther();
 
   /// @dev maxFee is greater than or equal to the amount being bridged, which is invalid
   error InvalidMaxFee(uint256 maxFee, uint256 amount);
 
   /// @dev TransferSpeed value is not a recognised member of the enum
   error InvalidTransferSpeed();
+
+  /// @dev Constructor parameter is zero address
+  error InvalidZeroAddress();
+
+  /// @dev Amount provided is zero
+  error InvalidZeroAmount();
 
   /// @notice Bridges USDC to a destination chain using CCTP V2
   /// @param amount The amount of USDC to bridge, denominated in USDC with 6 decimals, 1 USDC = 1_000_000

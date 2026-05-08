@@ -24,6 +24,9 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IAaveOFTBridgeS
   address public immutable OFT_USDT;
 
   /// @inheritdoc IAaveOFTBridgeSteward
+  /// @dev Assumes `IERC20(USDT).decimals() == IOFT(OFT_USDT).sharedDecimals()`. If they ever differ, OFT
+  ///      will truncate the bridged amount to shared decimals on send and the dust will remain on the
+  ///      steward (recoverable via `rescueToken`). For USDT/USDT0 this is 6 == 6.
   address public immutable USDT;
 
   /// @inheritdoc IAaveOFTBridgeSteward

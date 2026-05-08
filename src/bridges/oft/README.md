@@ -67,7 +67,7 @@ bridge.bridge{value: fee}(amount, expectedReceived, fee);
 
 The contract uses `OwnableWithGuardian`. The owner should be the local network's Level 1 Executor (Aave Governance); the guardian is a trusted ops role.
 
-The steward must also hold the local Collector `FUNDS_ADMIN` role so it can call `ICollector.transfer`.
+The steward must also hold the local Collector `FUNDS_ADMIN` role so it can call `ICollector.transfer`. Note that this role is broader than what `bridge()` actually exercises — it grants the steward the ability to move *any* token from the Collector to *any* address. A bug or future extension to the steward could in principle exfiltrate other Collector funds, so the role grant is a trust assumption that should be considered when reviewing changes to the steward.
 
 The owner or guardian can:
 

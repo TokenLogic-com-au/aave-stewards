@@ -33,6 +33,8 @@ interface IAaveOFTBridgeSteward {
   ///      either paid for in this call or beforehand.
   ///      The bridged USDT will be pulled from the Collector, so the Collector must have approved this contract to
   ///      spend the specified amount of USDT.
+  ///      Any `msg.value` in excess of the LayerZero native fee is retained on the contract and is recoverable
+  ///      via `rescueEth`.
   /// @param amount The amount of USDT to bridge
   /// @param minAmountLD The minimum amount to receive on destination (slippage protection)
   /// @param maxFee The maximum native fee in ETH wei allowed for the bridge
@@ -57,7 +59,8 @@ interface IAaveOFTBridgeSteward {
   /// @notice Returns the Aave Collector address
   function COLLECTOR() external view returns (address);
 
-  /// @notice Returns the receiver address for bridged tokens on the destination chain (Mainnet Collector)
+  /// @notice Returns the receiver address for bridged tokens on Ethereum mainnet (the Mainnet Collector at deploy time).
+  /// @dev Immutable; a Collector migration requires redeploying the steward.
   function RECEIVER() external view returns (address);
 
   /// @notice Quotes the native fee required to bridge USDT

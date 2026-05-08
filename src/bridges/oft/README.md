@@ -1,6 +1,8 @@
-# AaveOFTBridge
+# OFTBridgeSteward
 
-The AaveOFTBridge is a contract to facilitate moving USDT between networks using USDT0 OFT (Omnichain Fungible Token) via LayerZero V2. This provides seamless, 1:1 cross-chain USDT transfers with no slippage.
+`OFTBridgeSteward` is an Aave Steward that bridges USDT from a non-Ethereum chain to the Ethereum mainnet Collector using USDT0 OFT (Omnichain Fungible Token) over LayerZero V2. The transfer is 1:1 with no slippage.
+
+The steward is unidirectional: every deployed instance bridges *to* Ethereum mainnet. The destination endpoint and receiver are immutable, set at construction time (see `DESTINATION_EID` and `RECEIVER`).
 
 ## How USDT0 Works
 
@@ -8,102 +10,112 @@ USDT0 is Tether's official cross-chain solution using LayerZero's OFT standard. 
 
 ### Architecture
 
-- **On Ethereum**: Uses `OAdapterUpgradeable` which locks native USDT and sends LayerZero message
-- **On Other Chains**: Uses `OUpgradeable` which mints/burns USDT0
+- **On Ethereum (destination):** USDT0 uses `OAdapterUpgradeable` to release native USDT on receipt of a LayerZero message. The steward is **not** deployed on Ethereum.
+- **On other chains (source):** USDT0 uses `OUpgradeable` which burns USDT0 on send. The steward is deployed on these chains and calls `send` on the local OFT.
 
 ### Key Benefits
 
-- **No Slippage**: 1:1 lock/mint mechanism (unlike liquidity pool bridges)
-- **Unified Liquidity**: All USDT0 is backed 1:1 by USDT on Ethereum
-- **Dual DVN Security**: Verified by both LayerZero DVN and USDT0 DVN
+- **No Slippage:** 1:1 burn-on-source / release-on-destination mechanism.
+- **Unified Liquidity:** All USDT0 is backed 1:1 by USDT locked on Ethereum.
+- **Dual DVN Security:** Verified by both the LayerZero DVN and the USDT0 DVN.
 
 ## Functions
 
-### `bridge()`
+### `bridge(uint256 amount, uint256 minAmountLD, uint256 maxFee)`
 
-Bridges USDT to a destination chain. The steward pulls USDT from the Aave Collector via `ICollector.transfer()`, so it must have the Collector `FUNDS_ADMIN` role. The quoted LayerZero messaging fee should be supplied as native token value with the `bridge()` call.
+Bridges `amount` USDT to the immutable `RECEIVER` on Ethereum (`DESTINATION_EID`). Restricted to owner or guardian.
 
-### `quoteBridge()`
+- The steward pulls `amount` USDT from the local Collector via `ICollector.transfer`, so it must hold the Collector `FUNDS_ADMIN` role.
+- The native LayerZero fee is paid from the steward's own balance. It can be either pre-funded (use `receive()` or `transfer`) or supplied as `msg.value` on the same call — both add to `address(this).balance`, which is what the contract checks.
+- `minAmountLD` is the slippage floor passed through to the OFT.
+- `maxFee` caps the LayerZero `nativeFee`. The call reverts with `MaxFeeExceeded` if the quoted fee exceeds it. Always quote the fee first and pass a snug `maxFee` to avoid getting front-run by a fee spike.
+- LayerZero refunds any unused fee directly to the local Collector (the refund recipient is set to `COLLECTOR`).
 
-Returns the native token fee required for bridging. Call this before `bridge()` to know how much native token value to send with the transaction.
+### `quoteSendFee(uint256 amount, uint256 minAmountLD) returns (uint256)`
 
-### `quoteOFT()`
+Returns the native-token fee LayerZero will charge for `bridge(amount, minAmountLD, …)`. Use this to size `maxFee` and the value/balance to fund.
 
-Returns the expected amount to be received on the destination chain. Use this value as `minAmountLD` in the `bridge()` call.
+### `quoteAmountReceived(uint256 amount) returns (uint256)`
 
-For USDT0 OFT transfers, this should return the same amount (1:1, no slippage).
+Returns the amount of USDT the receiver will get on Ethereum for an `amount` send (after any OFT-level dust truncation). For USDT0 this equals `amount` (no slippage), but always re-quote on-chain rather than assume.
+
+### `rescueToken(address token)` / `rescueEth()`
+
+Sweeps the steward's full balance of `token` (or ETH) back to the local Collector. Restricted to owner or guardian.
 
 ## Usage Pattern
 
 ```solidity
-// 1. Quote the expected received amount
-uint256 expectedReceived = bridge.quoteOFT(dstEid, amount, receiver);
+// 1. Quote the expected received amount on Ethereum.
+uint256 expectedReceived = bridge.quoteAmountReceived(amount);
 
-// 2. Quote the native fee
-uint256 fee = bridge.quoteBridge(dstEid, amount, receiver, expectedReceived);
+// 2. Quote the LayerZero native fee.
+uint256 fee = bridge.quoteSendFee(amount, expectedReceived);
 
-// 3. Grant the steward the Collector FUNDS_ADMIN role
+// 3. Grant the steward FUNDS_ADMIN on the local Collector (one-time).
 IAccessControl(address(collector)).grantRole(
     ICollector(address(collector)).FUNDS_ADMIN_ROLE(),
     address(bridge)
 );
 
-// 4. Execute the bridge, sending the quoted native fee
-bridge.bridge{value: fee}(dstEid, amount, receiver, expectedReceived, fee);
+// 4. Execute the bridge. Either pre-fund the steward with `fee` wei
+//    of native, or supply it as msg.value on the same call.
+bridge.bridge{value: fee}(amount, expectedReceived, fee);
 ```
 
 ## Permissions
 
-The contract implements `OwnableWithGuardian` for permissioned functions. The owner should be the respective network's Level 1 Executor (Governance), and the guardian should be a trusted operations role.
+The contract uses `OwnableWithGuardian`. The owner should be the local network's Level 1 Executor (Aave Governance); the guardian is a trusted ops role.
 
-The steward must also be granted the Collector `FUNDS_ADMIN` role so it can call `ICollector.transfer()`.
+The steward must also hold the local Collector `FUNDS_ADMIN` role so it can call `ICollector.transfer`.
 
 The owner or guardian can:
 
-- Call `bridge()` to initiate transfers
-- Call rescue functions to return assets to the Collector
+- Call `bridge()` to initiate transfers.
+- Call `rescueToken()` / `rescueEth()` to sweep stuck assets back to the local Collector.
 
 Only the owner can:
 
-- Update allowed receivers
-- Transfer ownership
+- Transfer ownership.
+
+There is no allow-list of receivers: `RECEIVER` is set at deployment time and immutable.
 
 ## Security Considerations
 
-- The contract inherits from `RescuableBase`, exposing rescue hooks used by the steward's rescue functions
-- Slippage protection via `minAmountLD` parameter prevents receiving less than expected
-- The `quoteOFT()` function should be called immediately before bridging to get accurate amounts
-- Only the owner or guardian can execute bridges, and only to explicitly allowed receivers
+- **Slippage protection:** `minAmountLD` enforces the floor for tokens received on Ethereum. Quote `quoteAmountReceived` immediately before sending.
+- **Fee protection:** `maxFee` caps the LayerZero native fee, avoiding open-ended drains if quoting and execution land in different blocks.
+- **Approval hygiene:** The steward `forceApprove`s the OFT for exactly `amount`, then resets to `0` after `send`, so no allowance is left dangling.
+- **Refund routing:** LayerZero's refund recipient is hard-coded to the local `COLLECTOR`, so excess native fee goes back to Aave directly.
+- **Rescue path:** Inherits `RescuableBase`; `maxRescue` returns the steward's full token balance, allowing complete sweep.
+- **Fixed destination/receiver:** `DESTINATION_EID` (Ethereum mainnet) and `RECEIVER` are immutable, removing destination-spoofing surface.
 
 ## Retry Mechanism
 
-LayerZero includes a retry mechanism to handle transactions which fail to execute on the destination chain.
-
-Because LayerZero separates the verification of a message from its execution, if a message fails to execute, it can be retried without having to resend it from the origin chain. This is possible because the message has already been confirmed by the DVNs as a valid message packet, meaning execution can be retried at any time, by anyone.
+LayerZero supports retrying messages that fail to execute on the destination chain. Because verification (DVN attestation) is decoupled from execution, an already-verified message can be re-executed by anyone without resending it from the source chain.
 
 ### How to Retry
 
-To retry a failed message:
+1. **LayerZero Scan UI:** find the failed message at [layerzeroscan.com](https://layerzeroscan.com/) and trigger a retry.
+2. **Direct call:** invoke `lzReceive` on the destination Endpoint contract.
 
-1. **LayerZero Scan Interface**: Use the [LayerZero Scan](https://layerzeroscan.com/) UI to locate and retry the failed message
-2. **Direct Contract Call**: Call the `lzReceive` function directly on the Endpoint contract
-
-For more details, see the [LayerZero debugging documentation](https://docs.layerzero.network/v2/developers/evm/troubleshooting/debugging-messages#retry-message).
+See the [LayerZero debugging documentation](https://docs.layerzero.network/v2/developers/evm/troubleshooting/debugging-messages#retry-message) for details.
 
 ## Supported Chains
 
-USDT0 is currently deployed on the following chains:
+USDT0 is currently deployed on the chains below. Endpoint IDs / OFT addresses are mirrored in [`OFTConstants.sol`](./OFTConstants.sol).
 
 ### Endpoint IDs and OFT Contracts
 
-| Chain    | Endpoint ID | USDT0 OFT Contract                         | Notes                            |
-| -------- | ----------- | ------------------------------------------ | -------------------------------- |
-| Ethereum | 30101       | 0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee | OAdapterUpgradeable (locks USDT) |
-| Arbitrum | 30110       | 0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92 | OUpgradeable                     |
-| Polygon  | 30109       | 0x6BA10300f0DC58B7a1e4c0e41f5daBb7D7829e13 | OUpgradeable                     |
-| Optimism | 30111       | 0xF03b4d9AC1D5d1E7c4cEf54C2A313b9fe051A0aD | OUpgradeable                     |
-| Ink      | 30339       | 0x0200C29006150606B650577BBE7B6248F58470c1 | OUpgradeable                     |
-| Plasma   | 30383       | 0x02ca37966753bDdDf11216B73B16C1dE756A7CF9 | OUpgradeable                     |
+| Chain    | Role        | Endpoint ID | USDT0 OFT Contract                         | Notes                            |
+| -------- | ----------- | ----------- | ------------------------------------------ | -------------------------------- |
+| Ethereum | Destination | 30101       | 0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee | OAdapterUpgradeable (locks USDT) |
+| Arbitrum | Source      | 30110       | 0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92 | OUpgradeable                     |
+| Polygon  | Source      | 30109       | 0x6BA10300f0DC58B7a1e4c0e41f5daBb7D7829e13 | OUpgradeable                     |
+| Optimism | Source      | 30111       | 0xF03b4d9AC1D5d1E7c4cEf54C2A313b9fe051A0aD | OUpgradeable                     |
+| Ink      | Source      | 30339       | 0x0200C29006150606B650577BBE7B6248F58470c1 | OUpgradeable (no deploy script)  |
+| Plasma   | Source      | 30383       | 0x02ca37966753bDdDf11216B73B16C1dE756A7CF9 | OUpgradeable                     |
+
+The steward is deployed on each *source* chain. Deployment scripts live in [`scripts/DeployOFTBridge.s.sol`](../../../scripts/DeployOFTBridge.s.sol) and currently cover Arbitrum, Polygon, Optimism, and Plasma.
 
 ### USDT Token Addresses
 
@@ -125,9 +137,9 @@ USDT0 is currently deployed on the following chains:
 
 ## Known Limitations
 
-1. **USDT0 Only**: Only transfers within the USDT0 system are supported.
-
-2. **LayerZero Fees**: A small native token fee is required for the LayerZero messaging. Use `quoteBridge()` to get the exact fee.
+1. **Destination is fixed to Ethereum mainnet.** A new contract deployment is required to bridge to any other chain.
+2. **USDT0 only.** Only USDT transfers within the USDT0 system are supported.
+3. **LayerZero native fee.** A small native-token fee is required for messaging. Quote it with `quoteSendFee` before each call.
 
 ## References
 

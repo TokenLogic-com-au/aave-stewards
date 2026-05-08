@@ -15,9 +15,9 @@ library OFTConstants {
   uint32 internal constant INK_EID = 30339;
   uint32 internal constant PLASMA_EID = 30383;
 
-  // USDT0 OFT Contracts - These are the contracts to call send() on for bridging
-  // On Ethereum: OAdapterUpgradeable (locks USDT, sends LayerZero message)
-  // On other chains: OUpgradeable (burns/mints USDT0)
+  // USDT0 OFT contracts. The steward calls `send()` on the OFT for the chain it's deployed on.
+  // Protocol context: on Ethereum the OFT is OAdapterUpgradeable (locks USDT); on other chains it's
+  // OUpgradeable (burns/mints USDT0). The steward is only deployed on the non-Ethereum side.
 
   /// @dev https://etherscan.io/address/0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee
   address internal constant ETHEREUM_USDT0_OFT = 0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee;
@@ -37,9 +37,9 @@ library OFTConstants {
   /// @dev https://plasmascan.to/address/0x02ca37966753bDdDf11216B73B16C1dE756A7CF9
   address internal constant PLASMA_USDT0_OFT = 0x02ca37966753bDdDf11216B73B16C1dE756A7CF9;
 
-  // USDT/USDT0 Token addresses (the actual ERC20 tokens users hold)
-  // On Ethereum: Native USDT (approve to OAdapterUpgradeable before bridging)
-  // On other chains: USDT0 token (TetherTokenOFTExtension or equivalent)
+  // USDT / USDT0 ERC20 token addresses. On Ethereum this is native USDT; on other chains it's the
+  // USDT0 token (TetherTokenOFTExtension or equivalent). The steward reads this from `IOFT.token()`
+  // at construction; these constants are kept here for off-chain tooling and tests.
 
   /// @dev https://etherscan.io/address/0xdAC17F958D2ee523a2206206994597C13D831ec7
   address internal constant ETHEREUM_USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;

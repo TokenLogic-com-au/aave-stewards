@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-interface IAaveOFTBridgeSteward {
+interface IOFTBridgeSteward {
   /// @dev Thrown when the contract balance is not enough to pay the native fee
   /// @param contractBalance The current balance of the contract
   /// @param nativeFee The required native fee for the bridge
@@ -23,16 +23,16 @@ interface IAaveOFTBridgeSteward {
   /// @param dstEid The destination LayerZero endpoint ID
   /// @param receiver The receiver address on destination
   /// @param amount The amount bridged
-  /// @param minAmountReceived The minimum expected amount on destination
+  /// @param minAmountLD The slippage floor passed to the OFT (minimum acceptable amount on destination)
   event Bridge(
-    address indexed token, uint32 indexed dstEid, address indexed receiver, uint256 amount, uint256 minAmountReceived
+    address indexed token, uint32 indexed dstEid, address indexed receiver, uint256 amount, uint256 minAmountLD
   );
 
   /// @notice Bridges USDT to a destination chain using OFT
   /// @dev Only callable by owner or guardian. Requires contract to hold at least the native fee for the bridge,
   ///      either paid for in this call or beforehand.
-  ///      The bridged USDT will be pulled from the Collector, so the Collector must have approved this contract to
-  ///      spend the specified amount of USDT.
+  ///      The bridged USDT is pulled from the Collector via `ICollector.transfer`, so the steward must hold
+  ///      `FUNDS_ADMIN_ROLE` on the Collector.
   ///      Any `msg.value` in excess of the LayerZero native fee is retained on the contract and is recoverable
   ///      via `rescueEth`.
   /// @param amount The amount of USDT to bridge

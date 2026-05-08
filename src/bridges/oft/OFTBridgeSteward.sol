@@ -7,38 +7,39 @@ import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/Safe
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
 import {RescuableBase, IRescuableBase} from "solidity-utils/contracts/utils/RescuableBase.sol";
 
-import {IAaveOFTBridgeSteward} from "./interfaces/IAaveOFTBridgeSteward.sol";
+import {IOFTBridgeSteward} from "./interfaces/IOFTBridgeSteward.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "./interfaces/IOFT.sol";
 import {OFTConstants} from "./OFTConstants.sol";
 
 /// @title OFTBridgeSteward
 /// @author @stevyhacker, jubeira (TokenLogic)
 /// @notice Helper contract to bridge USDT using OFT V2 (LayerZero OFT)
-contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IAaveOFTBridgeSteward {
+contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeSteward {
   using SafeERC20 for IERC20;
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   uint32 public constant DESTINATION_EID = OFTConstants.ETHEREUM_EID;
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   address public immutable OFT_USDT;
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   /// @dev Assumes `IERC20(USDT).decimals() == IOFT(OFT_USDT).sharedDecimals()`. If they ever differ, OFT
   ///      will truncate the bridged amount to shared decimals on send and the dust will remain on the
   ///      steward (recoverable via `rescueToken`). For USDT/USDT0 this is 6 == 6.
   address public immutable USDT;
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   address public immutable COLLECTOR;
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   address public immutable RECEIVER;
 
   /// @param oftUsdt The OFT address for USDT on this chain
   /// @param initialOwner The initial owner of the contract
   /// @param initialGuardian The initial guardian of the contract
-  /// @param collector The address to collect fees
+  /// @param collector The local Aave Collector that holds the USDT to bridge and receives rescues / LayerZero refunds
+  /// @param receiver The destination address on Ethereum (the mainnet Aave Collector)
   constructor(address oftUsdt, address initialOwner, address initialGuardian, address collector, address receiver)
     OwnableWithGuardian(initialOwner, initialGuardian)
   {
@@ -57,7 +58,7 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IAaveOFTBridgeS
   /// @dev Default receive function enabling the contract to accept native tokens for gas fees
   receive() external payable {}
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   function bridge(uint256 amount, uint256 minAmountLD, uint256 maxFee) external payable onlyOwnerOrGuardian {
     if (amount == 0) revert InvalidZeroAmount();
     if (minAmountLD == 0) revert InvalidZeroAmount();
@@ -81,23 +82,23 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IAaveOFTBridgeS
     emit Bridge(USDT, DESTINATION_EID, RECEIVER, amount, minAmountLD);
   }
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   function rescueToken(address token) external onlyOwnerOrGuardian {
     _emergencyTokenTransfer(token, COLLECTOR, type(uint256).max);
   }
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   function rescueEth() external onlyOwnerOrGuardian {
     _emergencyEtherTransfer(COLLECTOR, address(this).balance);
   }
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   function quoteSendFee(uint256 amount, uint256 minAmountLD) external view returns (uint256) {
     (, MessagingFee memory messagingFee) = _buildSendParamsAndMessagingFee(amount, minAmountLD);
     return messagingFee.nativeFee;
   }
 
-  /// @inheritdoc IAaveOFTBridgeSteward
+  /// @inheritdoc IOFTBridgeSteward
   function quoteAmountReceived(uint256 amount) external view returns (uint256) {
     SendParam memory sendParam = _buildSendParams(amount, 0);
     (,, OFTReceipt memory receipt) = IOFT(OFT_USDT).quoteOFT(sendParam);

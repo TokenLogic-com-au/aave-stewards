@@ -13,7 +13,7 @@ import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/
 import {OFTConstants} from "src/bridges/oft/OFTConstants.sol";
 import {OFTBridgeSteward} from "src/bridges/oft/OFTBridgeSteward.sol";
 import {IOFT} from "src/bridges/oft/interfaces/IOFT.sol";
-import {IAaveOFTBridgeSteward} from "src/bridges/oft/interfaces/IAaveOFTBridgeSteward.sol";
+import {IOFTBridgeSteward} from "src/bridges/oft/interfaces/IOFTBridgeSteward.sol";
 
 /**
  * @title OFTBridgeForkTestBase
@@ -36,7 +36,7 @@ contract OFTBridgeForkTestBase is Test {
   OFTBridgeSteward public arbitrumBridge;
 
   event Bridge(
-    address indexed token, uint32 indexed dstEid, address indexed receiver, uint256 amount, uint256 minAmountReceived
+    address indexed token, uint32 indexed dstEid, address indexed receiver, uint256 amount, uint256 minAmountLD
   );
 
   function setUp() public virtual {
@@ -200,24 +200,24 @@ contract ConstructorAndImmutablesTest is OFTBridgeForkTestBase {
   }
 
   function test_constructor_revertsIf_zeroGuardian() public {
-    vm.expectRevert(IAaveOFTBridgeSteward.InvalidZeroAddress.selector);
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
     new OFTBridgeSteward(
       OFTConstants.ETHEREUM_USDT0_OFT, owner, address(0), address(AaveV3Ethereum.COLLECTOR), mainnetReceiver
     );
   }
 
   function test_constructor_revertsIf_zeroCollector() public {
-    vm.expectRevert(IAaveOFTBridgeSteward.InvalidZeroAddress.selector);
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
     new OFTBridgeSteward(OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(0), mainnetReceiver);
   }
 
   function test_constructor_revertsIf_zeroOft() public {
-    vm.expectRevert(IAaveOFTBridgeSteward.InvalidZeroAddress.selector);
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
     new OFTBridgeSteward(address(0), owner, guardian, address(AaveV3Ethereum.COLLECTOR), mainnetReceiver);
   }
 
   function test_constructor_revertsIf_zeroReceiver() public {
-    vm.expectRevert(IAaveOFTBridgeSteward.InvalidZeroAddress.selector);
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
     new OFTBridgeSteward(
       OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(AaveV3Ethereum.COLLECTOR), address(0)
     );

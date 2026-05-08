@@ -10,6 +10,8 @@ import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
 import {AaveV3Arbitrum} from "aave-address-book/AaveV3Arbitrum.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
 
+import {ICollector} from "aave-address-book/AaveV3.sol";
+
 import {OFTConstants} from "src/bridges/oft/OFTConstants.sol";
 import {OFTBridgeSteward} from "src/bridges/oft/OFTBridgeSteward.sol";
 import {IOFT} from "src/bridges/oft/interfaces/IOFT.sol";
@@ -48,6 +50,36 @@ contract OFTBridgeForkTestBase is Test {
     mainnetBridge = new OFTBridgeSteward(
       OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(AaveV3Ethereum.COLLECTOR), mainnetReceiver
     );
+  }
+
+  /// @dev Spins up an Arbitrum fork, deploys an `arbitrumBridge`, and optionally
+  ///      grants FUNDS_ADMIN, deals USDT to the local Collector, and pre-funds the steward.
+  function _setUpArbitrumBridge(bool grantFundsAdminRole, uint256 dealUsdtToCollector, uint256 dealNativeToBridge)
+    internal
+  {
+    arbitrumFork = vm.createSelectFork(vm.rpcUrl("arbitrum"));
+
+    arbitrumBridge = new OFTBridgeSteward(
+      OFTConstants.ARBITRUM_USDT0_OFT,
+      owner,
+      guardian,
+      address(AaveV3Arbitrum.COLLECTOR),
+      address(AaveV3Ethereum.COLLECTOR)
+    );
+
+    if (grantFundsAdminRole) {
+      bytes32 fundsAdminRole = AaveV3Arbitrum.COLLECTOR.FUNDS_ADMIN_ROLE();
+      vm.prank(AaveV3Arbitrum.ACL_ADMIN);
+      IAccessControl(address(AaveV3Arbitrum.COLLECTOR)).grantRole(fundsAdminRole, address(arbitrumBridge));
+    }
+
+    if (dealUsdtToCollector > 0) {
+      deal(OFTConstants.ARBITRUM_USDT, address(AaveV3Arbitrum.COLLECTOR), dealUsdtToCollector);
+    }
+
+    if (dealNativeToBridge > 0) {
+      vm.deal(address(arbitrumBridge), dealNativeToBridge);
+    }
   }
 }
 
@@ -274,5 +306,219 @@ contract RescuableTest is OFTBridgeForkTestBase {
       address(AaveV3Ethereum.COLLECTOR).balance, collectorBalanceBefore + ethAmount, "Collector should receive ETH"
     );
     assertEq(address(mainnetBridge).balance, 0, "Bridge should have 0 ETH balance");
+  }
+}
+
+/// @notice bridge() revert paths: maxFee cap, native balance, zero args, OFT-side slippage.
+contract BridgeRevertsTest is OFTBridgeForkTestBase {
+  uint256 public quotedFee;
+
+  function setUp() public override {
+    _setUpArbitrumBridge({
+      grantFundsAdminRole: true,
+      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
+      dealNativeToBridge: 0
+    });
+    quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
+  }
+
+  function test_bridge_revertsIf_maxFeeExceeded() public {
+    vm.expectRevert(abi.encodeWithSelector(IOFTBridgeSteward.MaxFeeExceeded.selector, quotedFee, quotedFee - 1));
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee - 1);
+  }
+
+  function test_bridge_revertsIf_insufficientBalance() public {
+    // Steward deliberately not funded.
+    vm.expectRevert(abi.encodeWithSelector(IOFTBridgeSteward.InsufficientBalance.selector, 0, quotedFee));
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, type(uint256).max);
+  }
+
+  function test_bridge_revertsIf_zeroAmount() public {
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAmount.selector);
+    vm.prank(owner);
+    arbitrumBridge.bridge(0, 1, type(uint256).max);
+  }
+
+  function test_bridge_revertsIf_zeroMinAmountLD() public {
+    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAmount.selector);
+    vm.prank(owner);
+    arbitrumBridge.bridge(1, 0, type(uint256).max);
+  }
+
+  function test_bridge_revertsIf_slippageExceeded() public {
+    vm.deal(address(arbitrumBridge), quotedFee);
+    // Bare expectRevert: slippage is enforced by the underlying OFT and the exact selector / args
+    // depend on the live OFT implementation.
+    vm.expectRevert();
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT + 1, type(uint256).max);
+  }
+}
+
+/// @notice bridge() access control: non-owner/guardian rejection and the guardian happy path.
+contract BridgeAccessControlTest is OFTBridgeForkTestBase {
+  uint256 public quotedFee;
+
+  function setUp() public override {
+    _setUpArbitrumBridge({
+      grantFundsAdminRole: true,
+      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
+      dealNativeToBridge: 0
+    });
+    quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
+    vm.deal(address(arbitrumBridge), quotedFee);
+  }
+
+  function test_bridge_revertsIf_notOwnerOrGuardian() public {
+    address notOwner = makeAddr("not-owner");
+    vm.expectRevert(abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, notOwner));
+    vm.prank(notOwner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+  }
+
+  function test_bridge_byGuardian_succeeds() public {
+    uint256 totalSupplyBefore = IERC20(OFTConstants.ARBITRUM_USDT).totalSupply();
+
+    vm.expectEmit(true, true, true, true, address(arbitrumBridge));
+    emit Bridge(
+      OFTConstants.ARBITRUM_USDT,
+      OFTConstants.ETHEREUM_EID,
+      address(AaveV3Ethereum.COLLECTOR),
+      LARGE_BRIDGE_AMOUNT,
+      LARGE_BRIDGE_AMOUNT
+    );
+
+    vm.prank(guardian);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+
+    assertEq(
+      IERC20(OFTConstants.ARBITRUM_USDT).totalSupply(),
+      totalSupplyBefore - LARGE_BRIDGE_AMOUNT,
+      "USDT should be burned"
+    );
+  }
+}
+
+/// @notice bridge() reverts inside ICollector.transfer when the steward lacks FUNDS_ADMIN.
+contract BridgeMissingRoleTest is OFTBridgeForkTestBase {
+  uint256 public quotedFee;
+
+  function setUp() public override {
+    _setUpArbitrumBridge({
+      grantFundsAdminRole: false,
+      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
+      dealNativeToBridge: 0
+    });
+    quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
+    vm.deal(address(arbitrumBridge), quotedFee);
+  }
+
+  function test_bridge_revertsIf_noFundsAdminRole() public {
+    vm.expectRevert(ICollector.OnlyFundsAdmin.selector);
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+  }
+}
+
+/// @notice Ownership lifecycle (Ownable from OZ via OwnableWithGuardian).
+contract TransferOwnershipTest is OFTBridgeForkTestBase {
+  function test_transferOwnership() public {
+    address newOwner = GovernanceV3Ethereum.EXECUTOR_LVL_1;
+
+    vm.prank(owner);
+    mainnetBridge.transferOwnership(newOwner);
+
+    assertEq(mainnetBridge.owner(), newOwner, "Ownership should be transferred");
+  }
+
+  function test_transferOwnership_revertsIf_notOwner() public {
+    address notOwner = makeAddr("not-owner");
+    address newOwner = makeAddr("new-owner");
+
+    vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, notOwner));
+    vm.prank(notOwner);
+    mainnetBridge.transferOwnership(newOwner);
+  }
+
+  function test_renounceOwnership() public {
+    vm.prank(owner);
+    mainnetBridge.renounceOwnership();
+
+    assertEq(mainnetBridge.owner(), address(0), "Owner should be zero address");
+  }
+}
+
+/// @notice rescueEth access control: non-owner/guardian rejection and the guardian happy path.
+contract RescueEthAccessControlTest is OFTBridgeForkTestBase {
+  uint256 public constant ETH_AMOUNT = 5 ether;
+
+  function setUp() public override {
+    super.setUp();
+    vm.deal(address(mainnetBridge), ETH_AMOUNT);
+  }
+
+  function test_rescueEth_revertsIf_notOwnerOrGuardian() public {
+    address notOwner = makeAddr("not-owner");
+    vm.expectRevert(abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, notOwner));
+    vm.prank(notOwner);
+    mainnetBridge.rescueEth();
+  }
+
+  function test_rescueEth_byGuardian_succeeds() public {
+    uint256 collectorBalanceBefore = address(AaveV3Ethereum.COLLECTOR).balance;
+
+    vm.prank(guardian);
+    mainnetBridge.rescueEth();
+
+    assertEq(
+      address(AaveV3Ethereum.COLLECTOR).balance,
+      collectorBalanceBefore + ETH_AMOUNT,
+      "Collector should receive ETH"
+    );
+    assertEq(address(mainnetBridge).balance, 0, "Bridge should have 0 ETH balance");
+  }
+}
+
+/// @notice Funding paths for the LayerZero native fee: pre-fund vs. msg.value, and excess retention.
+contract BridgeNativeFeePathsTest is OFTBridgeForkTestBase {
+  uint256 public quotedFee;
+
+  function setUp() public override {
+    _setUpArbitrumBridge({
+      grantFundsAdminRole: true,
+      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
+      dealNativeToBridge: 0
+    });
+    quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
+  }
+
+  function test_bridge_preFunded_zeroValue() public {
+    vm.deal(address(arbitrumBridge), quotedFee);
+
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+
+    assertEq(address(arbitrumBridge).balance, 0, "Steward should have spent its native");
+  }
+
+  function test_bridge_msgValue_only() public {
+    vm.deal(owner, quotedFee);
+
+    vm.prank(owner);
+    arbitrumBridge.bridge{value: quotedFee}(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+
+    assertEq(address(arbitrumBridge).balance, 0, "Steward should have spent the msg.value");
+  }
+
+  function test_bridge_excessPreFunding_remainsOnSteward() public {
+    uint256 buffer = 1 ether;
+    vm.deal(address(arbitrumBridge), quotedFee + buffer);
+
+    vm.prank(owner);
+    arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
+
+    assertEq(address(arbitrumBridge).balance, buffer, "Excess pre-funding should remain on steward");
   }
 }

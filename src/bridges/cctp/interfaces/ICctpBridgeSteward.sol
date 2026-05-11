@@ -57,28 +57,22 @@ interface ICctpBridgeSteward {
   function rescueEth() external;
 
   /// @notice Returns the CCTP domain identifier for the destination chain (Ethereum Mainnet)
-  /// @return The domain ID for the destination chain
   function DESTINATION_DOMAIN() external view returns (uint32);
 
   /// @notice Returns the TokenMessengerV2 contract address
-  /// @return Address of the CCTP V2 TokenMessenger
   function TOKEN_MESSENGER() external view returns (address);
 
   /// @notice Returns the USDC token address on this chain
-  /// @return Address of the USDC token
   function USDC() external view returns (address);
 
   /// @notice Returns the source collector address on this chain
-  /// @return Address of the source collector
   function COLLECTOR() external view returns (address);
 
   /// @notice Returns the destination receiver address (Mainnet collector) for bridge transfers
-  /// @return Address of the destination receiver (Mainnet collector)
   function RECEIVER() external view returns (address);
 
   /// @notice Returns the local CCTP domain identifier
   /// @dev Captured at deploy time from the (upgradeable) TokenMessengerV2 / MessageTransmitterV2.
   ///      A redeploy is required if Circle migrates these contracts and the local domain changes.
-  /// @return The domain ID for this chain
   function LOCAL_DOMAIN() external view returns (uint32);
 }

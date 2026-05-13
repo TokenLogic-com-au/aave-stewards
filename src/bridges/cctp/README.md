@@ -7,8 +7,8 @@ The AaveCctpBridge is a contract to facilitate bridging USDC across chains using
 - Bridge USDC from a supported source chain back to the Aave Mainnet Collector via CCTP V2
 - Support for both Fast and Standard transfer speeds
 - Steward access model (`owner` + `guardian`) for operational execution
-- Bridges pull USDC from a pre-configured source `COLLECTOR`
-- Bridges always send to a single immutable `RECEIVER` (the Mainnet Collector) on the Ethereum domain — both are set at deploy time and cannot be changed
+- Bridges pull USDC from a pre-configured source `COLLECTOR` (set at deploy time)
+- Bridges always send to the Aave Mainnet Collector on the Ethereum domain — the receiver is hardcoded as the `MAINNET_COLLECTOR` constant (sourced from aave-address-book's `AaveV3Ethereum.COLLECTOR`) and cannot be changed
 
 ## Transfer Speeds
 
@@ -69,12 +69,14 @@ Note: the API returns a fee _rate_ (`minimumFee` in bps), not a precomputed abso
 The contract implements `OwnableWithGuardian` for permissioned functions.
 The owner is expected to be the respective network's Level 1 Executor (Governance), while the guardian provides an operational backup path.
 
-`bridge()` can be called by `owner` or `guardian`. The destination domain and receiver are immutable — there are no setters.
+`bridge()` can be called by `owner` or `guardian`. The destination domain and the Mainnet Collector receiver are hardcoded constants — there are no setters.
 
 ## Security Considerations
 
 The contract exposes `rescueToken()` and `rescueEth()`, callable by `owner` or `guardian`.
 Both rescue methods always transfer assets back to `COLLECTOR` (not arbitrary recipients).
+
+The contract does not expose a `receive()` fallback, so ETH cannot arrive via a plain transfer. `rescueEth()` is retained as a safety net for ETH that arrives via `selfdestruct` or pre-deploy funding.
 
 ## CCTP Domain IDs
 
@@ -105,7 +107,7 @@ function bridge(
 ) external onlyOwnerOrGuardian;
 ```
 
-Bridges USDC to the immutable `RECEIVER` on the Ethereum domain. The bridge contract pulls USDC from the source-chain `COLLECTOR` via `ICollector.transfer`, so the bridge must hold the Collector `FUNDS_ADMIN` role. Destination domain (`DESTINATION_DOMAIN`) and recipient (`RECEIVER`) are set at construction and cannot be changed — to bridge to a different destination, deploy a new instance.
+Bridges USDC to `MAINNET_COLLECTOR` on the Ethereum domain. The bridge contract pulls USDC from the source-chain `COLLECTOR` via `ICollector.transfer`, so the bridge must hold the Collector `FUNDS_ADMIN` role. The destination domain (`DESTINATION_DOMAIN`) and recipient (`MAINNET_COLLECTOR`) are compile-time constants — to change either, the contract source must be modified and redeployed.
 
 Parameters:
 

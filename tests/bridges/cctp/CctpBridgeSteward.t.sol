@@ -240,6 +240,7 @@ contract RescuableTest is CctpBridgeStewardTestBase {
   }
 
   function test_rescueEth_revertsIf_notOwnerOrGuardian() public {
+    // Bridge cannot receive ether through regular transfers, so we use vm.deal directly.
     vm.deal(address(bridge), 1 ether);
 
     vm.prank(alice);

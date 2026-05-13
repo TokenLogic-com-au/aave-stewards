@@ -3,10 +3,12 @@ pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 
+import {AaveV3Arbitrum} from "aave-address-book/AaveV3Arbitrum.sol";
 import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
-import {ERC20Mock} from "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {ERC20Mock} from "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
 
 import {CctpBridgeSteward} from "src/bridges/cctp/CctpBridgeSteward.sol";
@@ -17,12 +19,12 @@ import {CctpConstants} from "src/bridges/cctp/CctpConstants.sol";
 
 contract CctpBridgeStewardTestBase is Test {
   CctpBridgeSteward public bridge;
-  IERC20 public usdc = new ERC20Mock();
-  address public tokenMessenger = makeAddr("tokenMessenger");
+  IERC20 public usdc = IERC20(CctpConstants.ARBITRUM_USDC);
+  address public tokenMessenger = CctpConstants.ARBITRUM_TOKEN_MESSENGER;
+  address public collector = address(AaveV3Arbitrum.COLLECTOR);
+  address public receiver = address(AaveV3Ethereum.COLLECTOR);
   address public owner = makeAddr("owner");
   address public guardian = makeAddr("guardian");
-  address public collector = makeAddr("collector");
-  address public receiver = address(AaveV3Ethereum.COLLECTOR);
   address public alice = makeAddr("alice");
 
   uint256 public constant AMOUNT = 10_000e6; // 10k USDC
@@ -40,44 +42,15 @@ contract CctpBridgeStewardTestBase is Test {
   }
 
   function setUp() public virtual {
-    try vm.activeFork() returns (
-      uint256
-    ) {
-    // If we are on a fork, continue; all the dependencies should be available.
-    }
-    catch {
-      // If not, mock the necessary calls to deploy the bridge correctly.
-      address localMessageTransmitter = makeAddr("localMessageTransmitter");
-      vm.mockCall(
-        tokenMessenger,
-        abi.encodeCall(ITokenMessengerV2(tokenMessenger).localMessageTransmitter, ()),
-        abi.encode(localMessageTransmitter)
-      );
-      vm.mockCall(
-        localMessageTransmitter,
-        abi.encodeCall(IMessageTransmitterV2(localMessageTransmitter).localDomain, ()),
-        abi.encode(CctpConstants.ARBITRUM_DOMAIN)
-      );
-    }
+    string memory rpcUrl = vm.envOr("RPC_ARBITRUM", string(""));
+    vm.createSelectFork(rpcUrl, 459740700);
     bridge = _deployBridge();
 
     _fundCollector(AMOUNT);
-  }
 
-  function _bridge(address caller, uint256 maxFee, ICctpBridgeSteward.TransferSpeed speed) internal {
-    uint256 collectorBalanceBefore = usdc.balanceOf(collector);
-
-    vm.expectEmit();
-    emit ICctpBridgeSteward.Bridge(address(usdc), CctpConstants.ETHEREUM_DOMAIN, receiver, AMOUNT, speed);
-
-    vm.prank(caller);
-    bridge.bridge(AMOUNT, maxFee, speed);
-
-    assertEq(usdc.balanceOf(address(bridge)), 0, "Bridge should have no USDC left");
-    assertEq(usdc.balanceOf(collector), collectorBalanceBefore - AMOUNT, "Collector should transfer USDC");
-    assertEq(
-      usdc.allowance(address(bridge), tokenMessenger), 0, "Bridge should have no USDC allowance for TokenMessenger"
-    );
+    bytes32 fundsAdminRole = AaveV3Arbitrum.COLLECTOR.FUNDS_ADMIN_ROLE();
+    vm.prank(AaveV3Arbitrum.ACL_ADMIN);
+    IAccessControl(collector).grantRole(fundsAdminRole, address(bridge));
   }
 }
 
@@ -157,6 +130,40 @@ contract ConstructorTest is CctpBridgeStewardTestBase {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
     new CctpBridgeSteward(
       CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, guardian, address(0)
+    );
+  }
+}
+
+contract BridgeTest is CctpBridgeStewardTestBase {
+  function test_bridge_fast_owner() public {
+    _bridge(owner, AMOUNT / 100, ICctpBridgeSteward.TransferSpeed.Fast);
+  }
+
+  function test_bridge_fast_guardian() public {
+    _bridge(guardian, AMOUNT / 100, ICctpBridgeSteward.TransferSpeed.Fast);
+  }
+
+  function test_bridge_standard_owner() public {
+    _bridge(owner, 0, ICctpBridgeSteward.TransferSpeed.Standard);
+  }
+
+  function test_bridge_standard_guardian() public {
+    _bridge(guardian, 0, ICctpBridgeSteward.TransferSpeed.Standard);
+  }
+
+  function _bridge(address caller, uint256 maxFee, ICctpBridgeSteward.TransferSpeed speed) internal {
+    uint256 collectorBalanceBefore = usdc.balanceOf(collector);
+
+    vm.expectEmit();
+    emit ICctpBridgeSteward.Bridge(address(usdc), CctpConstants.ETHEREUM_DOMAIN, receiver, AMOUNT, speed);
+
+    vm.prank(caller);
+    bridge.bridge(AMOUNT, maxFee, speed);
+
+    assertEq(usdc.balanceOf(address(bridge)), 0, "Bridge should have no USDC left");
+    assertEq(usdc.balanceOf(collector), collectorBalanceBefore - AMOUNT, "Collector should transfer USDC");
+    assertEq(
+      usdc.allowance(address(bridge), tokenMessenger), 0, "Bridge should have no USDC allowance for TokenMessenger"
     );
   }
 }

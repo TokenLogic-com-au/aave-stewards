@@ -68,8 +68,8 @@ interface ICctpBridgeSteward {
   /// @notice Returns the source collector address on this chain
   function COLLECTOR() external view returns (address);
 
-  /// @notice Returns the destination receiver address (Mainnet collector) for bridge transfers
-  function RECEIVER() external view returns (address);
+  /// @notice Returns the Mainnet collector address (destination receiver) for bridge transfers
+  function MAINNET_COLLECTOR() external view returns (address);
 
   /// @notice Returns the local CCTP domain identifier
   /// @dev Captured at deploy time from the (upgradeable) TokenMessengerV2 / MessageTransmitterV2.

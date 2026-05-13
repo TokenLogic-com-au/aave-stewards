@@ -28,7 +28,7 @@ contract CctpBridgeStewardTestBase is Test {
   uint256 public constant AMOUNT = 10_000e6; // 10k USDC
 
   function _deployBridge() internal returns (CctpBridgeSteward) {
-    return new CctpBridgeSteward(tokenMessenger, address(usdc), owner, guardian, collector, receiver);
+    return new CctpBridgeSteward(tokenMessenger, address(usdc), owner, guardian, collector);
   }
 
   function _addressToBytes32(address addr) internal pure returns (bytes32) {
@@ -107,7 +107,7 @@ contract ConstructorTest is CctpBridgeStewardTestBase {
     assertEq(bridge.TOKEN_MESSENGER(), tokenMessenger, "TOKEN_MESSENGER mismatch");
     assertEq(bridge.USDC(), address(usdc), "USDC mismatch");
     assertEq(bridge.COLLECTOR(), collector, "COLLECTOR mismatch");
-    assertEq(bridge.RECEIVER(), receiver, "RECEIVER mismatch");
+    assertEq(bridge.MAINNET_COLLECTOR(), receiver, "MAINNET_COLLECTOR mismatch");
     assertEq(bridge.LOCAL_DOMAIN(), CctpConstants.ARBITRUM_DOMAIN, "LOCAL_DOMAIN mismatch");
     assertEq(bridge.DESTINATION_DOMAIN(), CctpConstants.ETHEREUM_DOMAIN, "DESTINATION_DOMAIN mismatch");
     assertEq(bridge.owner(), owner, "owner mismatch");
@@ -126,44 +126,37 @@ contract ConstructorTest is CctpBridgeStewardTestBase {
     );
 
     vm.expectRevert(ICctpBridgeSteward.InvalidLocalDomain.selector);
-    new CctpBridgeSteward(tokenMessenger, address(usdc), owner, guardian, collector, receiver);
+    new CctpBridgeSteward(tokenMessenger, address(usdc), owner, guardian, collector);
   }
 
   function test_revertsIf_constructorTokenMessengerZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
-    new CctpBridgeSteward(address(0), CctpConstants.ETHEREUM_USDC, owner, guardian, collector, receiver);
+    new CctpBridgeSteward(address(0), CctpConstants.ETHEREUM_USDC, owner, guardian, collector);
   }
 
   function test_revertsIf_constructorUsdcZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
-    new CctpBridgeSteward(CctpConstants.ETHEREUM_TOKEN_MESSENGER, address(0), owner, guardian, collector, receiver);
+    new CctpBridgeSteward(CctpConstants.ETHEREUM_TOKEN_MESSENGER, address(0), owner, guardian, collector);
   }
 
   function test_revertsIf_constructorOwnerZero() public {
     vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
     new CctpBridgeSteward(
-      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, address(0), guardian, collector, receiver
+      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, address(0), guardian, collector
     );
   }
 
   function test_revertsIf_constructorGuardianZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
     new CctpBridgeSteward(
-      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, address(0), collector, receiver
+      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, address(0), collector
     );
   }
 
   function test_revertsIf_constructorCollectorZero() public {
     vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
     new CctpBridgeSteward(
-      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, guardian, address(0), receiver
-    );
-  }
-
-  function test_revertsIf_constructorReceiverZero() public {
-    vm.expectRevert(ICctpBridgeSteward.InvalidZeroAddress.selector);
-    new CctpBridgeSteward(
-      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, guardian, collector, address(0)
+      CctpConstants.ETHEREUM_TOKEN_MESSENGER, CctpConstants.ETHEREUM_USDC, owner, guardian, address(0)
     );
   }
 }
@@ -212,15 +205,8 @@ contract RescuableTest is CctpBridgeStewardTestBase {
     bridge.rescueToken(address(usdc));
   }
 
-  function test_sendEthToBridge_reverts() public {
-    vm.deal(address(this), 1 ether);
-    vm.expectRevert(ICctpBridgeSteward.CannotReceiveEther.selector);
-    payable(bridge).transfer(1 ether);
-  }
-
   function test_rescueEth_owner() public {
     uint256 rescueAmount = 1 ether;
-    // Bridge cannot receive ether through regular transfers, so we use vm.deal directly.
     vm.deal(address(bridge), rescueAmount);
     assertEq(address(bridge).balance, rescueAmount, "Bridge should have ETH to rescue");
 

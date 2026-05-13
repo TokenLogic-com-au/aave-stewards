@@ -41,7 +41,6 @@ contract ArbitrumBridgeTest is BridgeTestBase {
     usdc = IERC20(CctpConstants.ARBITRUM_USDC);
     collector = address(AaveV3Arbitrum.COLLECTOR);
     tokenMessenger = CctpConstants.ARBITRUM_TOKEN_MESSENGER;
-    receiver = address(AaveV3Arbitrum.COLLECTOR);
 
     super.setUp();
 
@@ -59,7 +58,6 @@ contract BaseBridgeTest is BridgeTestBase {
     usdc = IERC20(CctpConstants.BASE_USDC);
     collector = address(AaveV3Base.COLLECTOR);
     tokenMessenger = CctpConstants.BASE_TOKEN_MESSENGER;
-    receiver = address(AaveV3Base.COLLECTOR);
 
     super.setUp();
 
@@ -77,7 +75,6 @@ contract OptimismBridgeTest is BridgeTestBase {
     usdc = IERC20(CctpConstants.OPTIMISM_USDC);
     collector = address(AaveV3Optimism.COLLECTOR);
     tokenMessenger = CctpConstants.OPTIMISM_TOKEN_MESSENGER;
-    receiver = address(AaveV3Optimism.COLLECTOR);
 
     super.setUp();
 
@@ -95,7 +92,6 @@ contract PolygonBridgeTest is BridgeTestBase {
     usdc = IERC20(CctpConstants.POLYGON_USDC);
     collector = address(AaveV3Polygon.COLLECTOR);
     tokenMessenger = CctpConstants.POLYGON_TOKEN_MESSENGER;
-    receiver = address(AaveV3Polygon.COLLECTOR);
 
     super.setUp();
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
 import {ICollector} from "aave-address-book/AaveV3.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -22,6 +23,9 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
   uint32 public constant DESTINATION_DOMAIN = CctpConstants.ETHEREUM_DOMAIN;
 
   /// @inheritdoc ICctpBridgeSteward
+  address public constant MAINNET_COLLECTOR = address(AaveV3Ethereum.COLLECTOR);
+
+  /// @inheritdoc ICctpBridgeSteward
   address public immutable TOKEN_MESSENGER;
 
   /// @inheritdoc ICctpBridgeSteward
@@ -29,9 +33,6 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
 
   /// @inheritdoc ICctpBridgeSteward
   address public immutable COLLECTOR;
-
-  /// @inheritdoc ICctpBridgeSteward
-  address public immutable RECEIVER;
 
   /// @inheritdoc ICctpBridgeSteward
   /// @dev Captured at deploy time from the (upgradeable) TokenMessengerV2 / MessageTransmitterV2.
@@ -43,34 +44,21 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
   /// @param owner The owner of the contract upon deployment
   /// @param guardian The initial guardian of the contract upon deployment
   /// @param collector The address of the source collector on this chain
-  /// @param receiver The address of the destination receiver (Mainnet collector) for bridge transfers
-  constructor(
-    address tokenMessenger,
-    address usdc,
-    address owner,
-    address guardian,
-    address collector,
-    address receiver
-  ) OwnableWithGuardian(owner, guardian) {
+  constructor(address tokenMessenger, address usdc, address owner, address guardian, address collector)
+    OwnableWithGuardian(owner, guardian)
+  {
     if (tokenMessenger == address(0)) revert InvalidZeroAddress();
     if (usdc == address(0)) revert InvalidZeroAddress();
     if (guardian == address(0)) revert InvalidZeroAddress();
     if (collector == address(0)) revert InvalidZeroAddress();
-    if (receiver == address(0)) revert InvalidZeroAddress();
 
     TOKEN_MESSENGER = tokenMessenger;
     USDC = usdc;
     COLLECTOR = collector;
-    RECEIVER = receiver;
 
     address localMessageTransmitter = ITokenMessengerV2(tokenMessenger).localMessageTransmitter();
     LOCAL_DOMAIN = IMessageTransmitterV2(localMessageTransmitter).localDomain();
     if (LOCAL_DOMAIN == DESTINATION_DOMAIN) revert InvalidLocalDomain();
-  }
-
-  /// @dev No use case to receive ETH; prevent accidental transfers.
-  receive() external payable {
-    if (msg.value > 0) revert CannotReceiveEther();
   }
 
   /// @inheritdoc ICctpBridgeSteward
@@ -92,13 +80,19 @@ contract CctpBridgeSteward is OwnableWithGuardian, RescuableBase, ICctpBridgeSte
 
     ITokenMessengerV2(TOKEN_MESSENGER)
       .depositForBurn(
-        amount, DESTINATION_DOMAIN, bytes32(uint256(uint160(RECEIVER))), USDC, bytes32(0), maxFee, finalityThreshold
+        amount,
+        DESTINATION_DOMAIN,
+        bytes32(uint256(uint160(MAINNET_COLLECTOR))),
+        USDC,
+        bytes32(0),
+        maxFee,
+        finalityThreshold
       );
 
     // Clear the allowance to prevent any potential issues down the line.
     IERC20(USDC).forceApprove(TOKEN_MESSENGER, 0);
 
-    emit Bridge(USDC, DESTINATION_DOMAIN, RECEIVER, amount, speed);
+    emit Bridge(USDC, DESTINATION_DOMAIN, MAINNET_COLLECTOR, amount, speed);
   }
 
   /// @inheritdoc ICctpBridgeSteward

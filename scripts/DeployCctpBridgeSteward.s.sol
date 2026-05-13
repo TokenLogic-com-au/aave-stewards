@@ -19,7 +19,6 @@ import {CctpConstants} from "src/bridges/cctp/CctpConstants.sol";
 
 address constant TOKEN_LOGIC = 0x3765A685a401622C060E5D700D9ad89413363a91;
 address constant GUARDIAN = 0x3765A685a401622C060E5D700D9ad89413363a91;
-address constant RECEIVER = address(AaveV3Ethereum.COLLECTOR);
 bytes32 constant SALT = "Aave CCTP Bridge";
 
 contract DeployCctpBridgeArbitrum is ArbitrumScript {
@@ -29,8 +28,7 @@ contract DeployCctpBridgeArbitrum is ArbitrumScript {
       CctpConstants.ARBITRUM_USDC,
       TOKEN_LOGIC,
       GUARDIAN,
-      address(AaveV3Arbitrum.COLLECTOR),
-      RECEIVER
+      address(AaveV3Arbitrum.COLLECTOR)
     );
   }
 }
@@ -42,8 +40,7 @@ contract DeployCctpBridgeOptimism is OptimismScript {
       CctpConstants.OPTIMISM_USDC,
       TOKEN_LOGIC,
       GUARDIAN,
-      address(AaveV3Optimism.COLLECTOR),
-      RECEIVER
+      address(AaveV3Optimism.COLLECTOR)
     );
   }
 }
@@ -55,8 +52,7 @@ contract DeployCctpBridgePolygon is PolygonScript {
       CctpConstants.POLYGON_USDC,
       TOKEN_LOGIC,
       GUARDIAN,
-      address(AaveV3Polygon.COLLECTOR),
-      RECEIVER
+      address(AaveV3Polygon.COLLECTOR)
     );
   }
 }
@@ -64,12 +60,7 @@ contract DeployCctpBridgePolygon is PolygonScript {
 contract DeployCctpBridgeBase is BaseScript {
   function run() external broadcast {
     new CctpBridgeSteward{salt: SALT}(
-      CctpConstants.BASE_TOKEN_MESSENGER,
-      CctpConstants.BASE_USDC,
-      TOKEN_LOGIC,
-      GUARDIAN,
-      address(AaveV3Base.COLLECTOR),
-      RECEIVER
+      CctpConstants.BASE_TOKEN_MESSENGER, CctpConstants.BASE_USDC, TOKEN_LOGIC, GUARDIAN, address(AaveV3Base.COLLECTOR)
     );
   }
 }

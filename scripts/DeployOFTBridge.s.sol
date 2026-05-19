@@ -23,7 +23,6 @@ import {OFTConstants} from "src/bridges/oft/OFTConstants.sol";
 
 address constant TOKEN_LOGIC = 0x3765A685a401622C060E5D700D9ad89413363a91;
 bytes32 constant SALT = "Aave Treasury OFT Bridge";
-address constant RECEIVER = address(AaveV3Ethereum.COLLECTOR);
 
 contract DeployOFTArbitrum is ArbitrumScript {
   function run() external broadcast {
@@ -31,8 +30,7 @@ contract DeployOFTArbitrum is ArbitrumScript {
       OFTConstants.ARBITRUM_USDT0_OFT, // USDT0 OFT (OUpgradeable)
       TOKEN_LOGIC, // owner
       GovernanceV3Arbitrum.EXECUTOR_LVL_1, // guardian
-      address(AaveV3Arbitrum.COLLECTOR), // collector
-      RECEIVER
+      address(AaveV3Arbitrum.COLLECTOR) // collector
     );
   }
 }
@@ -43,8 +41,7 @@ contract DeployOFTPolygon is PolygonScript {
       OFTConstants.POLYGON_USDT0_OFT, // USDT0 OFT (OUpgradeable)
       TOKEN_LOGIC, // owner
       GovernanceV3Polygon.EXECUTOR_LVL_1, // guardian
-      address(AaveV3Polygon.COLLECTOR), // collector
-      RECEIVER
+      address(AaveV3Polygon.COLLECTOR) // collector
     );
   }
 }
@@ -55,8 +52,7 @@ contract DeployOFTOptimism is OptimismScript {
       OFTConstants.OPTIMISM_USDT0_OFT, // USDT0 OFT (OUpgradeable)
       TOKEN_LOGIC, // owner
       GovernanceV3Optimism.EXECUTOR_LVL_1, // guardian
-      address(AaveV3Optimism.COLLECTOR), // collector
-      RECEIVER
+      address(AaveV3Optimism.COLLECTOR) // collector
     );
   }
 }
@@ -67,8 +63,7 @@ contract DeployOFTPlasma is PlasmaScript {
       OFTConstants.PLASMA_USDT0_OFT, // USDT0 OFT (OUpgradeable)
       TOKEN_LOGIC, // owner
       GovernanceV3Plasma.EXECUTOR_LVL_1, // guardian
-      address(AaveV3Plasma.COLLECTOR), // collector
-      RECEIVER
+      address(AaveV3Plasma.COLLECTOR) // collector
     );
   }
 }

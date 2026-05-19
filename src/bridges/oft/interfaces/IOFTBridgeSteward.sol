@@ -59,9 +59,8 @@ interface IOFTBridgeSteward {
   /// @notice Returns the Aave Collector address
   function COLLECTOR() external view returns (address);
 
-  /// @notice Returns the receiver address for bridged tokens on Ethereum mainnet (the Mainnet Collector at deploy time).
-  /// @dev Immutable; a Collector migration requires redeploying the steward.
-  function RECEIVER() external view returns (address);
+  /// @notice Returns the Mainnet collector address (destination receiver) for bridge transfers
+  function MAINNET_COLLECTOR() external view returns (address);
 
   /// @notice Quotes the native fee required to bridge USDT
   /// @param amount The amount of USDT to bridge

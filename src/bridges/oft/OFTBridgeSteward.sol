@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {ICollector} from "aave-address-book/AaveV3.sol";
+import {AaveV3Ethereum} from "aave-address-book/AaveV3Ethereum.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
@@ -21,6 +22,9 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeStewa
   uint32 public constant DESTINATION_EID = OFTConstants.ETHEREUM_EID;
 
   /// @inheritdoc IOFTBridgeSteward
+  address public constant MAINNET_COLLECTOR = address(AaveV3Ethereum.COLLECTOR);
+
+  /// @inheritdoc IOFTBridgeSteward
   address public immutable OFT_USDT;
 
   /// @inheritdoc IOFTBridgeSteward
@@ -32,27 +36,21 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeStewa
   /// @inheritdoc IOFTBridgeSteward
   address public immutable COLLECTOR;
 
-  /// @inheritdoc IOFTBridgeSteward
-  address public immutable RECEIVER;
-
   /// @param oftUsdt The OFT address for USDT on this chain
   /// @param initialOwner The initial owner of the contract
   /// @param initialGuardian The initial guardian of the contract
   /// @param collector The local Aave Collector that holds the USDT to bridge and receives rescues / LayerZero refunds
-  /// @param receiver The destination address on Ethereum (the mainnet Aave Collector)
-  constructor(address oftUsdt, address initialOwner, address initialGuardian, address collector, address receiver)
+  constructor(address oftUsdt, address initialOwner, address initialGuardian, address collector)
     OwnableWithGuardian(initialOwner, initialGuardian)
   {
     if (oftUsdt == address(0)) revert InvalidZeroAddress();
     if (initialOwner == address(0)) revert InvalidZeroAddress();
     if (initialGuardian == address(0)) revert InvalidZeroAddress();
     if (collector == address(0)) revert InvalidZeroAddress();
-    if (receiver == address(0)) revert InvalidZeroAddress();
 
     OFT_USDT = oftUsdt;
     USDT = IOFT(OFT_USDT).token();
     COLLECTOR = collector;
-    RECEIVER = receiver;
   }
 
   /// @dev Default receive function enabling the contract to accept native tokens for gas fees
@@ -79,7 +77,7 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeStewa
     IOFT(OFT_USDT).send{value: nativeFee}(sendParam, messagingFee, COLLECTOR);
     IERC20(USDT).forceApprove(OFT_USDT, 0);
 
-    emit Bridge(USDT, DESTINATION_EID, RECEIVER, amount, minAmountLD);
+    emit Bridge(USDT, DESTINATION_EID, MAINNET_COLLECTOR, amount, minAmountLD);
   }
 
   /// @inheritdoc IOFTBridgeSteward
@@ -111,10 +109,10 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeStewa
   }
 
   /// @notice Helper function to build SendParam for a given amount and minAmountLD
-  function _buildSendParams(uint256 amount, uint256 minAmountLD) internal view returns (SendParam memory) {
+  function _buildSendParams(uint256 amount, uint256 minAmountLD) internal pure returns (SendParam memory) {
     return SendParam({
       dstEid: DESTINATION_EID,
-      to: bytes32(uint256(uint160(RECEIVER))),
+      to: bytes32(uint256(uint160(MAINNET_COLLECTOR))),
       amountLD: amount,
       minAmountLD: minAmountLD,
       extraOptions: new bytes(0),

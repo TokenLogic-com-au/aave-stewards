@@ -32,7 +32,7 @@ contract OFTBridgeForkTestBase is Test {
 
   address public owner = makeAddr("owner");
   address public guardian = makeAddr("guardian");
-  address public mainnetReceiver;
+  address public mainnetCollector = address(AaveV3Ethereum.COLLECTOR);
 
   OFTBridgeSteward public mainnetBridge;
   OFTBridgeSteward public arbitrumBridge;
@@ -42,14 +42,10 @@ contract OFTBridgeForkTestBase is Test {
   );
 
   function setUp() public virtual {
-    // Receiver value is irrelevant for non-bridging mainnet tests; pick any non-zero address.
-    mainnetReceiver = address(AaveV3Arbitrum.COLLECTOR);
-
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("mainnet"));
 
-    mainnetBridge = new OFTBridgeSteward(
-      OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(AaveV3Ethereum.COLLECTOR), mainnetReceiver
-    );
+    mainnetBridge =
+      new OFTBridgeSteward(OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(AaveV3Ethereum.COLLECTOR));
   }
 
   /// @dev Spins up an Arbitrum fork, deploys an `arbitrumBridge`, and optionally
@@ -59,13 +55,8 @@ contract OFTBridgeForkTestBase is Test {
   {
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("arbitrum"));
 
-    arbitrumBridge = new OFTBridgeSteward(
-      OFTConstants.ARBITRUM_USDT0_OFT,
-      owner,
-      guardian,
-      address(AaveV3Arbitrum.COLLECTOR),
-      address(AaveV3Ethereum.COLLECTOR)
-    );
+    arbitrumBridge =
+      new OFTBridgeSteward(OFTConstants.ARBITRUM_USDT0_OFT, owner, guardian, address(AaveV3Arbitrum.COLLECTOR));
 
     if (grantFundsAdminRole) {
       bytes32 fundsAdminRole = AaveV3Arbitrum.COLLECTOR.FUNDS_ADMIN_ROLE();
@@ -88,13 +79,8 @@ contract QuoteArbitrumToEthereumTest is OFTBridgeForkTestBase {
   function setUp() public override {
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("arbitrum"));
 
-    arbitrumBridge = new OFTBridgeSteward(
-      OFTConstants.ARBITRUM_USDT0_OFT,
-      owner,
-      guardian,
-      address(AaveV3Arbitrum.COLLECTOR),
-      address(AaveV3Ethereum.COLLECTOR)
-    );
+    arbitrumBridge =
+      new OFTBridgeSteward(OFTConstants.ARBITRUM_USDT0_OFT, owner, guardian, address(AaveV3Arbitrum.COLLECTOR));
   }
 
   function test_quoteSendFee_arbitrumToEthereum() public view {
@@ -121,13 +107,8 @@ contract BridgeArbitrumToEthereumTest is OFTBridgeForkTestBase {
   function setUp() public override {
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("arbitrum"));
 
-    arbitrumBridge = new OFTBridgeSteward(
-      OFTConstants.ARBITRUM_USDT0_OFT,
-      owner,
-      guardian,
-      address(AaveV3Arbitrum.COLLECTOR),
-      address(AaveV3Ethereum.COLLECTOR)
-    );
+    arbitrumBridge =
+      new OFTBridgeSteward(OFTConstants.ARBITRUM_USDT0_OFT, owner, guardian, address(AaveV3Arbitrum.COLLECTOR));
 
     bytes32 fundsAdminRole = AaveV3Arbitrum.COLLECTOR.FUNDS_ADMIN_ROLE();
     vm.prank(AaveV3Arbitrum.ACL_ADMIN);
@@ -135,8 +116,6 @@ contract BridgeArbitrumToEthereumTest is OFTBridgeForkTestBase {
   }
 
   function test_bridge_arbitrumToEthereum_10MillionUSDT() public {
-    address ethReceiver = address(AaveV3Ethereum.COLLECTOR);
-
     deal(OFTConstants.ARBITRUM_USDT, address(AaveV3Arbitrum.COLLECTOR), LARGE_BRIDGE_AMOUNT);
     assertEq(
       IERC20(OFTConstants.ARBITRUM_USDT).balanceOf(address(AaveV3Arbitrum.COLLECTOR)),
@@ -153,7 +132,7 @@ contract BridgeArbitrumToEthereumTest is OFTBridgeForkTestBase {
 
     vm.expectEmit(true, true, true, true, address(arbitrumBridge));
     emit Bridge(
-      OFTConstants.ARBITRUM_USDT, OFTConstants.ETHEREUM_EID, ethReceiver, LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT
+      OFTConstants.ARBITRUM_USDT, OFTConstants.ETHEREUM_EID, mainnetCollector, LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT
     );
 
     vm.prank(owner);
@@ -209,50 +188,38 @@ contract ConstructorAndImmutablesTest is OFTBridgeForkTestBase {
     assertEq(mainnetBridge.owner(), owner, "Owner should be set correctly");
     assertEq(mainnetBridge.guardian(), guardian, "Guardian should be set correctly");
     assertEq(mainnetBridge.COLLECTOR(), address(AaveV3Ethereum.COLLECTOR), "Collector should be set correctly");
-    assertEq(mainnetBridge.RECEIVER(), mainnetReceiver, "Receiver should be set correctly");
+    assertEq(mainnetBridge.MAINNET_COLLECTOR(), mainnetCollector, "Mainnet collector should be set correctly");
   }
 
   function test_constructor_arbitrumBridge() public {
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("arbitrum"));
 
-    arbitrumBridge = new OFTBridgeSteward(
-      OFTConstants.ARBITRUM_USDT0_OFT,
-      owner,
-      guardian,
-      address(AaveV3Arbitrum.COLLECTOR),
-      address(AaveV3Ethereum.COLLECTOR)
-    );
+    arbitrumBridge =
+      new OFTBridgeSteward(OFTConstants.ARBITRUM_USDT0_OFT, owner, guardian, address(AaveV3Arbitrum.COLLECTOR));
 
     assertEq(arbitrumBridge.OFT_USDT(), OFTConstants.ARBITRUM_USDT0_OFT, "OFT_USDT should be set correctly");
     assertEq(arbitrumBridge.USDT(), OFTConstants.ARBITRUM_USDT, "USDT should be set correctly");
     assertEq(arbitrumBridge.owner(), owner, "Owner should be set correctly");
     assertEq(arbitrumBridge.guardian(), guardian, "Guardian should be set correctly");
     assertEq(arbitrumBridge.COLLECTOR(), address(AaveV3Arbitrum.COLLECTOR), "Collector should be set correctly");
-    assertEq(arbitrumBridge.RECEIVER(), address(AaveV3Ethereum.COLLECTOR), "Receiver should be set correctly");
+    assertEq(
+      arbitrumBridge.MAINNET_COLLECTOR(), address(AaveV3Ethereum.COLLECTOR), "Mainnet collector should be set correctly"
+    );
   }
 
   function test_constructor_revertsIf_zeroGuardian() public {
     vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
-    new OFTBridgeSteward(
-      OFTConstants.ETHEREUM_USDT0_OFT, owner, address(0), address(AaveV3Ethereum.COLLECTOR), mainnetReceiver
-    );
+    new OFTBridgeSteward(OFTConstants.ETHEREUM_USDT0_OFT, owner, address(0), address(AaveV3Ethereum.COLLECTOR));
   }
 
   function test_constructor_revertsIf_zeroCollector() public {
     vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
-    new OFTBridgeSteward(OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(0), mainnetReceiver);
+    new OFTBridgeSteward(OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(0));
   }
 
   function test_constructor_revertsIf_zeroOft() public {
     vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
-    new OFTBridgeSteward(address(0), owner, guardian, address(AaveV3Ethereum.COLLECTOR), mainnetReceiver);
-  }
-
-  function test_constructor_revertsIf_zeroReceiver() public {
-    vm.expectRevert(IOFTBridgeSteward.InvalidZeroAddress.selector);
-    new OFTBridgeSteward(
-      OFTConstants.ETHEREUM_USDT0_OFT, owner, guardian, address(AaveV3Ethereum.COLLECTOR), address(0)
-    );
+    new OFTBridgeSteward(address(0), owner, guardian, address(AaveV3Ethereum.COLLECTOR));
   }
 }
 
@@ -314,11 +281,7 @@ contract BridgeRevertsTest is OFTBridgeForkTestBase {
   uint256 public quotedFee;
 
   function setUp() public override {
-    _setUpArbitrumBridge({
-      grantFundsAdminRole: true,
-      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
-      dealNativeToBridge: 0
-    });
+    _setUpArbitrumBridge({grantFundsAdminRole: true, dealUsdtToCollector: LARGE_BRIDGE_AMOUNT, dealNativeToBridge: 0});
     quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
   }
 
@@ -362,11 +325,7 @@ contract BridgeAccessControlTest is OFTBridgeForkTestBase {
   uint256 public quotedFee;
 
   function setUp() public override {
-    _setUpArbitrumBridge({
-      grantFundsAdminRole: true,
-      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
-      dealNativeToBridge: 0
-    });
+    _setUpArbitrumBridge({grantFundsAdminRole: true, dealUsdtToCollector: LARGE_BRIDGE_AMOUNT, dealNativeToBridge: 0});
     quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
     vm.deal(address(arbitrumBridge), quotedFee);
   }
@@ -394,9 +353,7 @@ contract BridgeAccessControlTest is OFTBridgeForkTestBase {
     arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT, quotedFee);
 
     assertEq(
-      IERC20(OFTConstants.ARBITRUM_USDT).totalSupply(),
-      totalSupplyBefore - LARGE_BRIDGE_AMOUNT,
-      "USDT should be burned"
+      IERC20(OFTConstants.ARBITRUM_USDT).totalSupply(), totalSupplyBefore - LARGE_BRIDGE_AMOUNT, "USDT should be burned"
     );
   }
 }
@@ -406,11 +363,7 @@ contract BridgeMissingRoleTest is OFTBridgeForkTestBase {
   uint256 public quotedFee;
 
   function setUp() public override {
-    _setUpArbitrumBridge({
-      grantFundsAdminRole: false,
-      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
-      dealNativeToBridge: 0
-    });
+    _setUpArbitrumBridge({grantFundsAdminRole: false, dealUsdtToCollector: LARGE_BRIDGE_AMOUNT, dealNativeToBridge: 0});
     quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
     vm.deal(address(arbitrumBridge), quotedFee);
   }
@@ -473,9 +426,7 @@ contract RescueEthAccessControlTest is OFTBridgeForkTestBase {
     mainnetBridge.rescueEth();
 
     assertEq(
-      address(AaveV3Ethereum.COLLECTOR).balance,
-      collectorBalanceBefore + ETH_AMOUNT,
-      "Collector should receive ETH"
+      address(AaveV3Ethereum.COLLECTOR).balance, collectorBalanceBefore + ETH_AMOUNT, "Collector should receive ETH"
     );
     assertEq(address(mainnetBridge).balance, 0, "Bridge should have 0 ETH balance");
   }
@@ -486,11 +437,7 @@ contract BridgeNativeFeePathsTest is OFTBridgeForkTestBase {
   uint256 public quotedFee;
 
   function setUp() public override {
-    _setUpArbitrumBridge({
-      grantFundsAdminRole: true,
-      dealUsdtToCollector: LARGE_BRIDGE_AMOUNT,
-      dealNativeToBridge: 0
-    });
+    _setUpArbitrumBridge({grantFundsAdminRole: true, dealUsdtToCollector: LARGE_BRIDGE_AMOUNT, dealNativeToBridge: 0});
     quotedFee = arbitrumBridge.quoteSendFee(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT);
   }
 

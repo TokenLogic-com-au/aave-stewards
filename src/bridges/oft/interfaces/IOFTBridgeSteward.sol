@@ -35,6 +35,10 @@ interface IOFTBridgeSteward {
   ///      `FUNDS_ADMIN_ROLE` on the Collector.
   ///      Any `msg.value` in excess of the LayerZero native fee is retained on the contract and is recoverable
   ///      via `rescueEth`.
+  ///      The native fee returned by `quoteSendFee` is a quote and may drift between the off-chain quote
+  ///      and on-chain execution (LayerZero executor uses periodically-refreshed oracle price feeds for
+  ///      destination gas). The steward re-quotes inside `bridge` and uses the current on-chain fee;
+  ///      `maxFee` caps that fee and reverts with `MaxFeeExceeded` if the live fee exceeds it.
   /// @param amount The amount of USDT to bridge
   /// @param minAmountLD The minimum amount to receive on destination (slippage protection)
   /// @param maxFee The maximum native fee in ETH wei allowed for the bridge

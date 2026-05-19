@@ -308,9 +308,9 @@ contract BridgeRevertsTest is OFTBridgeForkTestBase {
 
   function test_bridge_revertsIf_slippageExceeded() public {
     vm.deal(address(arbitrumBridge), quotedFee);
-    // Bare expectRevert: slippage is enforced by the underlying OFT and the exact selector / args
-    // depend on the live OFT implementation.
-    vm.expectRevert();
+    vm.expectRevert(
+      abi.encodeWithSelector(IOFT.SlippageExceeded.selector, LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT + 1)
+    );
     vm.prank(owner);
     arbitrumBridge.bridge(LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT + 1, type(uint256).max);
   }

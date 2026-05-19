@@ -68,7 +68,6 @@ contract OFTBridgeSteward is OwnableWithGuardian, RescuableBase, IOFTBridgeStewa
     if (nativeFee > maxFee) revert MaxFeeExceeded(nativeFee, maxFee);
     if (address(this).balance < nativeFee) revert InsufficientBalance(address(this).balance, nativeFee);
 
-    // Pull pre-approved USDT funds from collector.
     ICollector(COLLECTOR).transfer(IERC20(USDT), address(this), amount);
 
     // Approve OFT to pull USDT and bridge funds to destination chain.

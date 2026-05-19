@@ -83,7 +83,7 @@ There is no allow-list of receivers: `MAINNET_COLLECTOR` is a constant in the co
 ## Security Considerations
 
 - **Slippage protection:** `minAmountLD` enforces the floor for tokens received on Ethereum. Quote `quoteAmountReceived` immediately before sending.
-- **Fee protection:** `maxFee` caps the LayerZero native fee, avoiding open-ended drains if quoting and execution land in different blocks.
+- **Fee protection:** The native fee returned by `quoteSendFee` is a *quote* and can drift between the off-chain quote and on-chain execution — LayerZero's executor uses oracle price feeds for destination gas that refresh periodically (typically on the order of minutes), and DVN fees can also shift. The steward re-quotes inside `bridge` immediately before `IOFT.send` and pays whatever the live fee is, drawing from its own balance. `maxFee` is the caller-supplied ceiling: if the live fee exceeds it the call reverts with `MaxFeeExceeded`, so the steward can never be drained beyond `maxFee` per call. Operational guidance: size `maxFee` as `quoteSendFee * (1 + buffer)` (e.g. `1.1x`); if a call reverts with `MaxFeeExceeded`, re-quote and retry.
 - **Approval hygiene:** The steward `forceApprove`s the OFT for exactly `amount`, then resets to `0` after `send`, so no allowance is left dangling.
 - **Refund routing:** LayerZero's refund recipient is hard-coded to the local `COLLECTOR`, so excess native fee goes back to Aave directly.
 - **Rescue path:** Inherits `RescuableBase`; `maxRescue` returns the steward's full token balance, allowing complete sweep.
@@ -139,7 +139,7 @@ The steward is deployed on each *source* chain. Deployment scripts live in [`scr
 
 1. **Destination is fixed to Ethereum mainnet.** A new contract deployment is required to bridge to any other chain.
 2. **USDT0 only.** Only USDT transfers within the USDT0 system are supported.
-3. **LayerZero native fee.** A small native-token fee is required for messaging. Quote it with `quoteSendFee` before each call.
+3. **LayerZero native fee.** A small native-token fee is required for messaging. Quote it with `quoteSendFee` before each call. The quote can drift between off-chain quote-time and on-chain execution; see **Fee protection** above for how `maxFee` bounds the exposure.
 
 ## References
 

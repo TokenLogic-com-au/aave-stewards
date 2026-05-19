@@ -2,7 +2,7 @@
 
 `OFTBridgeSteward` is an Aave Steward that bridges USDT from a non-Ethereum chain to the Ethereum mainnet Collector using USDT0 OFT (Omnichain Fungible Token) over LayerZero V2. The transfer is 1:1 with no slippage.
 
-The steward is unidirectional: every deployed instance bridges *to* Ethereum mainnet. The destination endpoint and receiver are immutable, set at construction time (see `DESTINATION_EID` and `RECEIVER`).
+The steward is unidirectional: every deployed instance bridges *to* Ethereum mainnet. The destination endpoint and receiver address are immutable, set in the contract's code (see `DESTINATION_EID` and `MAINNET_COLLECTOR`).
 
 ## How USDT0 Works
 
@@ -23,7 +23,7 @@ USDT0 is Tether's official cross-chain solution using LayerZero's OFT standard. 
 
 ### `bridge(uint256 amount, uint256 minAmountLD, uint256 maxFee)`
 
-Bridges `amount` USDT to the immutable `RECEIVER` on Ethereum (`DESTINATION_EID`). Restricted to owner or guardian.
+Bridges `amount` USDT to the immutable `MAINNET_COLLECTOR` on Ethereum (`DESTINATION_EID`). Restricted to owner or guardian.
 
 - The steward pulls `amount` USDT from the local Collector via `ICollector.transfer`, so it must hold the Collector `FUNDS_ADMIN` role.
 - The native LayerZero fee is paid from the steward's own balance. It can be either pre-funded (use `receive()` or `transfer`) or supplied as `msg.value` on the same call — both add to `address(this).balance`, which is what the contract checks.
@@ -37,7 +37,7 @@ Returns the native-token fee LayerZero will charge for `bridge(amount, minAmount
 
 ### `quoteAmountReceived(uint256 amount) returns (uint256)`
 
-Returns the amount of USDT the receiver will get on Ethereum for an `amount` send (after any OFT-level dust truncation). For USDT0 this equals `amount` (no slippage), but always re-quote on-chain rather than assume.
+Returns the amount of USDT the Mainnet Collector will get for an `amount` send (after any OFT-level dust truncation). For USDT0 this equals `amount` (no slippage), but always re-quote on-chain rather than assume.
 
 ### `rescueToken(address token)` / `rescueEth()`
 
@@ -78,7 +78,7 @@ Only the owner can:
 
 - Transfer ownership.
 
-There is no allow-list of receivers: `RECEIVER` is set at deployment time and immutable.
+There is no allow-list of receivers: `MAINNET_COLLECTOR` is a constant in the contract's code.
 
 ## Security Considerations
 
@@ -87,7 +87,7 @@ There is no allow-list of receivers: `RECEIVER` is set at deployment time and im
 - **Approval hygiene:** The steward `forceApprove`s the OFT for exactly `amount`, then resets to `0` after `send`, so no allowance is left dangling.
 - **Refund routing:** LayerZero's refund recipient is hard-coded to the local `COLLECTOR`, so excess native fee goes back to Aave directly.
 - **Rescue path:** Inherits `RescuableBase`; `maxRescue` returns the steward's full token balance, allowing complete sweep.
-- **Fixed destination/receiver:** `DESTINATION_EID` (Ethereum mainnet) and `RECEIVER` are immutable, removing destination-spoofing surface.
+- **Fixed destination/receiver:** `DESTINATION_EID` (Ethereum mainnet) and `MAINNET_COLLECTOR` are constants, removing destination-spoofing surface.
 
 ## Retry Mechanism
 

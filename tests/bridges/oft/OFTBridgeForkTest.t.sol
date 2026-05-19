@@ -37,10 +37,6 @@ contract OFTBridgeForkTestBase is Test {
   OFTBridgeSteward public mainnetBridge;
   OFTBridgeSteward public arbitrumBridge;
 
-  event Bridge(
-    address indexed token, uint32 indexed dstEid, address indexed receiver, uint256 amount, uint256 minAmountLD
-  );
-
   function setUp() public virtual {
     arbitrumFork = vm.createSelectFork(vm.rpcUrl("mainnet"));
 
@@ -131,7 +127,7 @@ contract BridgeArbitrumToEthereumTest is OFTBridgeForkTestBase {
     uint256 totalSupplyBefore = IERC20(OFTConstants.ARBITRUM_USDT).totalSupply();
 
     vm.expectEmit(true, true, true, true, address(arbitrumBridge));
-    emit Bridge(
+    emit IOFTBridgeSteward.Bridge(
       OFTConstants.ARBITRUM_USDT, OFTConstants.ETHEREUM_EID, mainnetCollector, LARGE_BRIDGE_AMOUNT, LARGE_BRIDGE_AMOUNT
     );
 
@@ -341,7 +337,7 @@ contract BridgeAccessControlTest is OFTBridgeForkTestBase {
     uint256 totalSupplyBefore = IERC20(OFTConstants.ARBITRUM_USDT).totalSupply();
 
     vm.expectEmit(true, true, true, true, address(arbitrumBridge));
-    emit Bridge(
+    emit IOFTBridgeSteward.Bridge(
       OFTConstants.ARBITRUM_USDT,
       OFTConstants.ETHEREUM_EID,
       address(AaveV3Ethereum.COLLECTOR),

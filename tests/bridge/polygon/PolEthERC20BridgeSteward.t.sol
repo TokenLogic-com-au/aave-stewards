@@ -22,16 +22,6 @@ import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager
  * command: forge test -vvv --match-path tests/bridge/polygon/PolEthERC20BridgeSteward.t.sol
  */
 contract PolEthERC20BridgeStewardTest is Test {
-    event Exit();
-    event FailedToSendETH();
-    event Bridge(address indexed token, uint256 amount);
-    event ConfirmExit(bytes proof);
-    event RootChainManagerUpdated(
-        address rootChainManager,
-        address oldRootChainManager
-    );
-    event SetTokenAllowed(address indexed token, bool allowed);
-
     PolEthERC20BridgeSteward bridgeMainnet;
     PolEthERC20BridgeSteward bridgePolygon;
     uint256 mainnetFork;
@@ -326,7 +316,7 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
         vm.startPrank(OWNER);
 
         vm.expectEmit(true, true, true, true, address(bridgePolygon));
-        emit SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+        emit IPolEthERC20BridgeSteward.SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
 
         bridgePolygon.setTokenAllowed(
             AaveV3PolygonAssets.USDC_UNDERLYING,
@@ -388,7 +378,7 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
             true
         );
         vm.expectEmit(true, true, true, true, address(bridgePolygon));
-        emit Bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
+        emit IPolEthERC20BridgeSteward.Bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
         bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
         vm.stopPrank();
 
@@ -447,7 +437,7 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
             true
         );
         vm.expectEmit();
-        emit Bridge(bridgePolygon.POL_POLYGON(), amount);
+        emit IPolEthERC20BridgeSteward.Bridge(bridgePolygon.POL_POLYGON(), amount);
         bridgePolygon.bridgePol(amount, false);
         vm.stopPrank();
 
@@ -472,7 +462,7 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
             true
         );
         vm.expectEmit();
-        emit Bridge(bridgePolygon.POL_POLYGON(), amount);
+        emit IPolEthERC20BridgeSteward.Bridge(bridgePolygon.POL_POLYGON(), amount);
         bridgePolygon.bridgePol(amount, true);
         vm.stopPrank();
 

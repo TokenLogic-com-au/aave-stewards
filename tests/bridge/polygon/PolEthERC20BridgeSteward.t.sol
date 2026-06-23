@@ -6,13 +6,9 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
-import {GovernanceV3Ethereum} from "aave-address-book/GovernanceV3Ethereum.sol";
 import {GovernanceV3Polygon} from "aave-address-book/GovernanceV3Polygon.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {AaveV3Polygon, AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
-import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
-import {ICollector} from "aave-v3-origin/contracts/treasury/ICollector.sol";
-import {IRescuable} from "solidity-utils/contracts/utils/Rescuable.sol";
 
 import {PolEthERC20BridgeSteward, IPolEthERC20BridgeSteward} from "src/bridge/polygon/PolEthERC20BridgeSteward.sol";
 import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager.sol";

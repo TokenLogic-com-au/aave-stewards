@@ -42,40 +42,45 @@ interface IPolEthERC20BridgeSteward {
     /// @dev Could not withdraw ETH to the Collector
     error FailedToSendETH();
 
+    /// @dev The new token configuration is the same as the current one
+    /// @param token The address of the ERC20 token
+    /// @param allowed The current allowed status of the token
+    error TokenConfigurationUnchanged(address token, bool allowed);
+
     /// @dev Token has not been approved for bridging
     error TokenNotAllowed();
 
-    /// This function withdraws an ERC20 token from Polygon to Mainnet. exit() needs
-    /// to be called on mainnet with the corresponding burnProof in order to complete.
-    /// @notice Polygon only. Function will revert if called from other network.
+    /// @notice This function withdraws an ERC20 token from Polygon to Mainnet
+    /// @dev `exit()` needs to be called on mainnet with the corresponding burnProof in order to complete.
+    /// Polygon only. The function will revert if called from other network
     /// @param token Polygon address of ERC20 token to withdraw
     /// @param amount Amount of tokens to withdraw
     function bridge(address token, uint256 amount) external;
 
-    /// This function withdraws POL from Polygon to Mainnet. confirmPolExit() needs
-    /// to be called on Mainnet with the corresponding burnProof in order to confirm withdrawal.
-    /// Then exitPol() needs to be called to do actual withdrawal of tokens.
-    /// @notice Polygon only. Function will revert if called from other network.
+    /// @notice Withdraw POL from Polygon to Mainnet
+    /// @dev confirmPolExit() needs to be called on Mainnet with the corresponding burnProof in order to confirm
+    /// withdrawal. Then exitPol() needs to be called to do actual withdrawal of tokens.
+    /// Polygon only. The function will revert if called from other network
     /// @param amount Amount of tokens to withdraw
     /// @param unwrap Whether to unwrap wPOL into POL prior to bridging
     function bridgePol(uint256 amount, bool unwrap) external;
 
-    /// This function completes the withdrawal process from Polygon to Mainnet.
-    /// Burn proof is generated via API. Please see README.md
-    /// @notice Mainnet only. Function will revert if called from other network.
-    /// Use ETH_MOCK_ADDRESS to withdraw ETH.
+    /// @notice Complete the withdrawal process from Polygon to Mainnet
+    /// @dev Burn proof is generated via API. Please see README.md.
+    /// Mainnet only. The function will revert if called from other network.
+    /// Use ETH_MOCK_ADDRESS to withdraw ETH
     /// @param token Mainnet address of ERC20 token to withdraw
     /// @param burnProof Burn proof generated via API
     function exit(address token, bytes calldata burnProof) external;
 
-    /// This function confirms the POL withdrawal process from Polygon to Mainnet (Step 2 of 3)
-    /// Burn proof is generated via API. Please see README.md
-    /// @notice Mainnet only. Function will revert if called from other network.
+    /// @notice Confirm the POL withdrawal process from Polygon to Mainnet (Step 2 of 3)
+    /// @dev Burn proof is generated via API. Please see README.md.
+    /// Mainnet only. The function will revert if called from other network
     /// @param burnProof Burn proof generated via API.
     function confirmPolExit(bytes calldata burnProof) external;
 
-    /// This function completes the POL withdrawal process from Polygon to Mainnet.
-    /// @notice Mainnet only. Function will revert if called from other network.
+    /// @notice This function completes the POL withdrawal process from Polygon to Mainnet (Step 3 of 3)
+    /// @dev Mainnet only. The function will revert if called from other network
     function exitPol() external;
 
     /// @notice Rescues the specified token back to the Collector
@@ -86,12 +91,13 @@ interface IPolEthERC20BridgeSteward {
     function rescueEth() external;
 
     /// @notice Sets a token to allowed/disallowed for bridging
-    /// @dev Only callable on Polygon.
+    /// @dev Only callable on Polygon
     /// @param token Address of the token to set status for
     /// @param allowed Whether token is allowed/disallowed
     function setTokenAllowed(address token, bool allowed) external;
 
     /// @notice Sets the RootChainManager
+    /// @dev Only callable on Mainnet
     /// @param rootChainManager Address of the Polygon Root Chain Manager on Mainnet
     function setRootChainManager(address rootChainManager) external;
 
@@ -119,10 +125,10 @@ interface IPolEthERC20BridgeSteward {
     /// @dev The polygon address of the POL token
     function POL_POLYGON() external view returns (address);
 
-    /// This function checks whether the L2 token to L1 token mapping exists.
-    /// If the mapping doesn't exist, DO NOT BRIDGE from Polygon.
-    /// @notice Call on Mainnet only.
+    /// @notice Check whether the L2 token to L1 token mapping exists
+    /// @dev If the mapping doesn't exist, DO NOT BRIDGE from Polygon.
+    /// Mainnet only
     /// @param l2token Address of the token on Polygon.
-    /// @return Boolean denoting whether mapping exists or not.
+    /// @return True if mapping exists; false otherwise.
     function isTokenMapped(address l2token) external view returns (bool);
 }

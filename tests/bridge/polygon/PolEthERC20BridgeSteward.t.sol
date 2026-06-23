@@ -15,6 +15,7 @@ import {ICollector} from "aave-v3-origin/contracts/treasury/ICollector.sol";
 import {IRescuable} from "solidity-utils/contracts/utils/Rescuable.sol";
 
 import {PolEthERC20BridgeSteward, IPolEthERC20BridgeSteward} from "src/bridge/polygon/PolEthERC20BridgeSteward.sol";
+import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager.sol";
 
 /**
  * @dev Test for PolEthERC20BridgeSteward contract
@@ -486,8 +487,6 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
 
 contract ExitTest is PolEthERC20BridgeStewardTest {
     function test_revertsIf_invalidCaller() public {
-        vm.selectFork(polygonFork);
-
         vm.expectRevert(
             abi.encodeWithSelector(
                 IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector,
@@ -503,6 +502,45 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
         vm.expectRevert(IPolEthERC20BridgeSteward.InvalidChain.selector);
         vm.prank(OWNER);
         bridgePolygon.exit(AaveV3EthereumAssets.USDC_UNDERLYING, new bytes(0));
+    }
+
+    function test_revertsIf_zeroEth() public {
+        vm.selectFork(mainnetFork);
+
+        bytes memory burnProof = "";
+        vm.mockCall(
+            bridgeMainnet.ROOT_CHAIN_MANAGER(),
+            abi.encodeWithSelector(
+                IRootChainManager.exit.selector,
+                burnProof
+            ),
+            abi.encode()
+        );
+
+        address ethMockAddress = bridgeMainnet.ETH_MOCK_ADDRESS();
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
+        vm.startPrank(OWNER);
+        bridgeMainnet.exit(ethMockAddress, burnProof);
+        vm.stopPrank();
+    }
+
+    function test_revertsIf_zeroToken() public {
+        vm.selectFork(mainnetFork);
+
+        bytes memory burnProof = "";
+        vm.mockCall(
+            bridgeMainnet.ROOT_CHAIN_MANAGER(),
+            abi.encodeWithSelector(
+                IRootChainManager.exit.selector,
+                burnProof
+            ),
+            abi.encode()
+        );
+
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
+        vm.startPrank(OWNER);
+        bridgeMainnet.exit(AaveV3EthereumAssets.USDC_UNDERLYING, burnProof);
+        vm.stopPrank();
     }
 
     function test_revertsIf_proofAlreadyProcessed() public {

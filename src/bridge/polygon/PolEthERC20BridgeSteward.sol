@@ -153,6 +153,7 @@ contract PolEthERC20BridgeSteward is
 
         if (address(token) == ETH_MOCK_ADDRESS) {
             uint256 balance = address(this).balance;
+            if (balance == 0) revert InvalidZeroAmount();
 
             (bool success, ) = address(COLLECTOR).call{value: balance}("");
             if (!success) {
@@ -161,6 +162,7 @@ contract PolEthERC20BridgeSteward is
             emit WithdrawToCollector(token, balance);
         } else {
             uint256 balance = IERC20(token).balanceOf(address(this));
+            if (balance == 0) revert InvalidZeroAmount();
 
             IERC20(token).safeTransfer(COLLECTOR, balance);
             emit WithdrawToCollector(token, balance);

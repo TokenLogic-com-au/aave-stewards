@@ -105,6 +105,7 @@ contract PolEthERC20BridgeSteward is
     ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
         if (!allowedTokens[token]) revert TokenNotAllowed();
+        if (amount == 0) revert InvalidZeroAmount();
 
         ICollector(COLLECTOR).transfer(IERC20(token), address(this), amount);
 
@@ -118,6 +119,7 @@ contract PolEthERC20BridgeSteward is
         bool unwrap
     ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+        if (amount == 0) revert InvalidZeroAmount();
         if (!allowedTokens[AaveV3PolygonAssets.WPOL_UNDERLYING])
             revert TokenNotAllowed();
 

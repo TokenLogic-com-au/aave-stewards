@@ -39,6 +39,9 @@ interface IPolEthERC20BridgeSteward {
     /// @dev Provided address cannot be the zero-address
     error InvalidZeroAddress();
 
+    /// @dev Provided amount cannot be zero
+    error InvalidZeroAmount();
+
     /// @dev Could not withdraw ETH to the Collector
     error FailedToSendETH();
 

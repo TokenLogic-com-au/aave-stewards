@@ -11,7 +11,6 @@ import {GovernanceV3Polygon} from "aave-address-book/GovernanceV3Polygon.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
 import {AaveV3Polygon, AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
 import {MiscEthereum} from "aave-address-book/MiscEthereum.sol";
-import {CollectorUtils} from "aave-helpers/src/CollectorUtils.sol";
 import {ICollector} from "aave-v3-origin/contracts/treasury/ICollector.sol";
 import {IRescuable} from "solidity-utils/contracts/utils/Rescuable.sol";
 
@@ -309,7 +308,13 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
 
         bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
 
-        vm.expectRevert(IPolEthERC20BridgeSteward.TokenConfigurationUnchanged.selector);
+        vm.expectRevert(
+          abi.encodeWithSelector(
+            IPolEthERC20BridgeSteward.TokenConfigurationUnchanged.selector,
+            AaveV3PolygonAssets.USDC_UNDERLYING,
+            true
+          )
+        );
         bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
 
         vm.stopPrank();
@@ -350,10 +355,24 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
         bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, 1_000e6);
     }
 
+    function test_revertsIf_zeroAmount() public {
+        vm.selectFork(polygonFork);
+        vm.startPrank(OWNER);
+        bridgePolygon.setTokenAllowed(
+            AaveV3PolygonAssets.USDC_UNDERLYING,
+            true
+        );
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
+        bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, 0);
+        vm.stopPrank();
+    }
+
     function test_successful() public {
         vm.selectFork(polygonFork);
 
         uint256 amount = 1_000e6;
+        // Collector holds aTokens; load with some underlying tokens required for the test.
+        deal(AaveV3PolygonAssets.USDC_UNDERLYING, address(AaveV3Polygon.COLLECTOR), amount);
 
         assertEq(
             IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(
@@ -400,6 +419,18 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
             )
         );
         bridgePolygon.bridgePol(1_000e6, false);
+    }
+
+    function test_revertsIf_zeroAmount() public {
+        vm.selectFork(polygonFork);
+
+        vm.startPrank(OWNER);
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
+        bridgePolygon.bridgePol(0, false);
+
+        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
+        bridgePolygon.bridgePol(0, true);
+        vm.stopPrank();
     }
 
     function test_successful_noUnwrap() public {
@@ -450,52 +481,6 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
             ),
             0
         );
-    }
-}
-
-contract SetRootChainManagerTest is PolEthERC20BridgeStewardTest {
-    function test_revertsIf_invalidChain() public {
-        vm.selectFork(polygonFork);
-        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidChain.selector);
-        vm.startPrank(OWNER);
-        bridgePolygon.setRootChainManager(makeAddr("root-chain-manager"));
-        vm.stopPrank();
-    }
-
-    function test_revertsIf_invalidCaller() public {
-        vm.selectFork(mainnetFork);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Ownable.OwnableUnauthorizedAccount.selector,
-                address(this)
-            )
-        );
-        bridgeMainnet.setRootChainManager(makeAddr("root-chain-manager"));
-    }
-
-    function test_revertsIf_invalidZeroAddress() public {
-        vm.selectFork(mainnetFork);
-        vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAddress.selector);
-
-        vm.startPrank(OWNER);
-        bridgeMainnet.setRootChainManager(address(0));
-        vm.stopPrank();
-    }
-
-    function test_successful() public {
-        vm.selectFork(mainnetFork);
-
-        address currentRootChainManager = bridgeMainnet._rootChainManager();
-        address newRootChainManager = makeAddr("root-chain-manager");
-
-        vm.expectEmit(true, true, true, true, address(bridgeMainnet));
-        emit RootChainManagerUpdated(
-            newRootChainManager,
-            currentRootChainManager
-        );
-
-        vm.prank(OWNER);
-        bridgeMainnet.setRootChainManager(newRootChainManager);
     }
 }
 

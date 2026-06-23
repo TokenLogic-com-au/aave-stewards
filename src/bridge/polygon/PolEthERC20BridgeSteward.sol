@@ -45,186 +45,152 @@ import {IPolEthERC20BridgeSteward} from "./interfaces/IPolEthERC20BridgeSteward.
  * While the permitted Service Provider will have full control over the funds, the allowed actions are limited by the contract itself.
  * All token interactions start and end on the Collector, so no funds ever leave the DAO's possession at any point in time.
  */
-contract PolEthERC20BridgeSteward is
-    IPolEthERC20BridgeSteward,
-    OwnableWithGuardian,
-    RescuableBase,
-    Multicall
-{
-    using SafeERC20 for IERC20;
+contract PolEthERC20BridgeSteward is IPolEthERC20BridgeSteward, OwnableWithGuardian, RescuableBase, Multicall {
+  using SafeERC20 for IERC20;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant ETH_MOCK_ADDRESS =
-        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant ETH_MOCK_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant ERC20_PREDICATE_BURN =
-        0x158d5fa3Ef8e4dDA8a5367deCF76b94E7efFCe95;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant ERC20_PREDICATE_BURN = 0x158d5fa3Ef8e4dDA8a5367deCF76b94E7efFCe95;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant WITHDRAW_MANAGER =
-        0x2A88696e0fFA76bAA1338F2C74497cC013495922;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant WITHDRAW_MANAGER = 0x2A88696e0fFA76bAA1338F2C74497cC013495922;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant POL_MAINNET =
-        0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant POL_MAINNET = 0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant POL_POLYGON =
-        0x0000000000000000000000000000000000001010;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant POL_POLYGON = 0x0000000000000000000000000000000000001010;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public constant ROOT_CHAIN_MANAGER = 0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public constant ROOT_CHAIN_MANAGER = 0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    address public immutable COLLECTOR;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  address public immutable COLLECTOR;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    mapping(address token => bool isAllowed) public allowedTokens;
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  mapping(address token => bool isAllowed) public allowedTokens;
 
-    /// @param initialOwner The owner of the contract upon deployment
-    /// @param initialGuardian The guardian of the contract upon deployment
-    /// @param collector The address of the Aave Collector on the deployed chain
-    constructor(
-        address initialOwner,
-        address initialGuardian,
-        address collector
-    ) OwnableWithGuardian(initialOwner, initialGuardian) {
-        if (initialGuardian == address(0)) revert InvalidZeroAddress();
-        if (collector == address(0)) revert InvalidZeroAddress();
-        COLLECTOR = collector;
+  /// @param initialOwner The owner of the contract upon deployment
+  /// @param initialGuardian The guardian of the contract upon deployment
+  /// @param collector The address of the Aave Collector on the deployed chain
+  constructor(address initialOwner, address initialGuardian, address collector)
+    OwnableWithGuardian(initialOwner, initialGuardian)
+  {
+    if (initialGuardian == address(0)) revert InvalidZeroAddress();
+    if (collector == address(0)) revert InvalidZeroAddress();
+    COLLECTOR = collector;
+  }
+
+  /// @dev Allows the contract to receive ETH on Mainnet and POL on Polygon
+  receive() external payable {}
+
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function bridge(address token, uint256 amount) external onlyOwnerOrGuardian {
+    if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+    if (!allowedTokens[token]) revert TokenNotAllowed();
+    if (amount == 0) revert InvalidZeroAmount();
+
+    ICollector(COLLECTOR).transfer(IERC20(token), address(this), amount);
+
+    IERC20Polygon(token).withdraw(amount);
+    emit Bridge(token, amount);
+  }
+
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function bridgePol(uint256 amount, bool unwrap) external onlyOwnerOrGuardian {
+    if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+    if (amount == 0) revert InvalidZeroAmount();
+    if (!allowedTokens[AaveV3PolygonAssets.WPOL_UNDERLYING]) {
+      revert TokenNotAllowed();
     }
 
-    /// @dev Allows the contract to receive ETH on Mainnet and POL on Polygon
-    receive() external payable {}
-
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function bridge(
-        address token,
-        uint256 amount
-    ) external onlyOwnerOrGuardian {
-        if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
-        if (!allowedTokens[token]) revert TokenNotAllowed();
-        if (amount == 0) revert InvalidZeroAmount();
-
-        ICollector(COLLECTOR).transfer(IERC20(token), address(this), amount);
-
-        IERC20Polygon(token).withdraw(amount);
-        emit Bridge(token, amount);
+    if (unwrap) {
+      ICollector(COLLECTOR).transfer(IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING), address(this), amount);
+      IWPol(AaveV3PolygonAssets.WPOL_UNDERLYING).withdraw(amount);
+    } else {
+      ICollector(COLLECTOR).transfer(IERC20(ICollector(COLLECTOR).ETH_MOCK_ADDRESS()), address(this), amount);
     }
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function bridgePol(
-        uint256 amount,
-        bool unwrap
-    ) external onlyOwnerOrGuardian {
-        if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
-        if (amount == 0) revert InvalidZeroAmount();
-        if (!allowedTokens[AaveV3PolygonAssets.WPOL_UNDERLYING])
-            revert TokenNotAllowed();
+    IERC20Polygon(POL_POLYGON).withdraw{value: amount}(amount);
+    emit Bridge(POL_POLYGON, amount);
+  }
 
-        if (unwrap) {
-            ICollector(COLLECTOR).transfer(
-                IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING),
-                address(this),
-                amount
-            );
-            IWPol(AaveV3PolygonAssets.WPOL_UNDERLYING).withdraw(amount);
-        } else {
-            ICollector(COLLECTOR).transfer(
-                IERC20(ICollector(COLLECTOR).ETH_MOCK_ADDRESS()),
-                address(this),
-                amount
-            );
-        }
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function exit(address token, bytes calldata burnProof) external {
+    if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
-        IERC20Polygon(POL_POLYGON).withdraw{value: amount}(amount);
-        emit Bridge(POL_POLYGON, amount);
+    IRootChainManager(ROOT_CHAIN_MANAGER).exit(burnProof);
+
+    if (address(token) == ETH_MOCK_ADDRESS) {
+      uint256 balance = address(this).balance;
+      if (balance == 0) revert InvalidZeroAmount();
+
+      (bool success,) = address(COLLECTOR).call{value: balance}("");
+      if (!success) {
+        revert FailedToSendETH();
+      }
+      emit WithdrawToCollector(token, balance);
+    } else {
+      uint256 balance = IERC20(token).balanceOf(address(this));
+      if (balance == 0) revert InvalidZeroAmount();
+
+      IERC20(token).safeTransfer(COLLECTOR, balance);
+      emit WithdrawToCollector(token, balance);
     }
+  }
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function exit(
-        address token,
-        bytes calldata burnProof
-    ) external {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function exitPol() external {
+    if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
-        IRootChainManager(ROOT_CHAIN_MANAGER).exit(burnProof);
+    IWithdrawManager(WITHDRAW_MANAGER).processExits(POL_MAINNET);
+    uint256 balance = IERC20(POL_MAINNET).balanceOf(address(this));
 
-        if (address(token) == ETH_MOCK_ADDRESS) {
-            uint256 balance = address(this).balance;
-            if (balance == 0) revert InvalidZeroAmount();
+    IERC20(POL_MAINNET).safeTransfer(COLLECTOR, balance);
+    emit WithdrawToCollector(POL_MAINNET, balance);
+  }
 
-            (bool success, ) = address(COLLECTOR).call{value: balance}("");
-            if (!success) {
-                revert FailedToSendETH();
-            }
-            emit WithdrawToCollector(token, balance);
-        } else {
-            uint256 balance = IERC20(token).balanceOf(address(this));
-            if (balance == 0) revert InvalidZeroAmount();
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function confirmPolExit(bytes calldata burnProof) external {
+    if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
-            IERC20(token).safeTransfer(COLLECTOR, balance);
-            emit WithdrawToCollector(token, balance);
-        }
-    }
+    IERC20PredicateBurnOnly(ERC20_PREDICATE_BURN).startExitWithBurntTokens(burnProof);
+    emit ConfirmExit(burnProof);
+  }
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function exitPol() external {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function rescueToken(address token) external onlyOwnerOrGuardian {
+    _emergencyTokenTransfer(token, COLLECTOR, type(uint256).max);
+  }
 
-        IWithdrawManager(WITHDRAW_MANAGER).processExits(POL_MAINNET);
-        uint256 balance = IERC20(POL_MAINNET).balanceOf(address(this));
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function rescueEth() external onlyOwnerOrGuardian {
+    _emergencyEtherTransfer(COLLECTOR, address(this).balance);
+  }
 
-        IERC20(POL_MAINNET).safeTransfer(COLLECTOR, balance);
-        emit WithdrawToCollector(POL_MAINNET, balance);
-    }
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function setTokenAllowed(address token, bool allowed) external onlyOwner {
+    if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
+    if (token == address(0)) revert InvalidZeroAddress();
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function confirmPolExit(bytes calldata burnProof) external {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
+    if (allowedTokens[token] == allowed) revert TokenConfigurationUnchanged(token, allowed);
 
-        IERC20PredicateBurnOnly(ERC20_PREDICATE_BURN).startExitWithBurntTokens(
-            burnProof
-        );
-        emit ConfirmExit(burnProof);
-    }
+    allowedTokens[token] = allowed;
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function rescueToken(address token) external onlyOwnerOrGuardian {
-        _emergencyTokenTransfer(token, COLLECTOR, type(uint256).max);
-    }
+    emit SetTokenAllowed(token, allowed);
+  }
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function rescueEth() external onlyOwnerOrGuardian {
-        _emergencyEtherTransfer(COLLECTOR, address(this).balance);
-    }
+  /// @inheritdoc IRescuableBase
+  function maxRescue(address token) public view override(RescuableBase) returns (uint256) {
+    return IERC20(token).balanceOf(address(this));
+  }
 
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function setTokenAllowed(address token, bool allowed) external onlyOwner {
-        if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
-        if (token == address(0)) revert InvalidZeroAddress();
+  /// @inheritdoc IPolEthERC20BridgeSteward
+  function isTokenMapped(address l2token) external view returns (bool) {
+    if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
-        if (allowedTokens[token] == allowed) revert TokenConfigurationUnchanged(token, allowed);
-
-        allowedTokens[token] = allowed;
-
-        emit SetTokenAllowed(token, allowed);
-    }
-
-    /// @inheritdoc IRescuableBase
-    function maxRescue(
-        address token
-    ) public view override(RescuableBase) returns (uint256) {
-        return IERC20(token).balanceOf(address(this));
-    }
-
-    /// @inheritdoc IPolEthERC20BridgeSteward
-    function isTokenMapped(address l2token) external view returns (bool) {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
-
-        return
-            IRootChainManager(ROOT_CHAIN_MANAGER).childToRootToken(l2token) !=
-            address(0);
-    }
+    return IRootChainManager(ROOT_CHAIN_MANAGER).childToRootToken(l2token) != address(0);
+  }
 }

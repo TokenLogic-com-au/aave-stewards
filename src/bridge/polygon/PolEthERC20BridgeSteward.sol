@@ -74,11 +74,10 @@ contract PolEthERC20BridgeSteward is
         0x0000000000000000000000000000000000001010;
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    address public immutable COLLECTOR;
+    address public constant ROOT_CHAIN_MANAGER = 0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    address public _rootChainManager =
-        0xA0c68C638235ee32657e8f720a23ceC1bFc77C77;
+    address public immutable COLLECTOR;
 
     /// @inheritdoc IPolEthERC20BridgeSteward
     mapping(address token => bool isAllowed) public allowedTokens;
@@ -148,7 +147,7 @@ contract PolEthERC20BridgeSteward is
     ) external onlyOwnerOrGuardian {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
-        IRootChainManager(_rootChainManager).exit(burnProof);
+        IRootChainManager(ROOT_CHAIN_MANAGER).exit(burnProof);
 
         if (address(token) == ETH_MOCK_ADDRESS) {
             uint256 balance = address(this).balance;
@@ -217,22 +216,11 @@ contract PolEthERC20BridgeSteward is
     }
 
     /// @inheritdoc IPolEthERC20BridgeSteward
-    function setRootChainManager(address rootChainManager) external onlyOwner {
-        if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
-        if (rootChainManager == address(0)) revert InvalidZeroAddress();
-
-        address oldRootChainManager = _rootChainManager;
-        _rootChainManager = rootChainManager;
-
-        emit RootChainManagerUpdated(rootChainManager, oldRootChainManager);
-    }
-
-    /// @inheritdoc IPolEthERC20BridgeSteward
     function isTokenMapped(address l2token) external view returns (bool) {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
         return
-            IRootChainManager(_rootChainManager).childToRootToken(l2token) !=
+            IRootChainManager(ROOT_CHAIN_MANAGER).childToRootToken(l2token) !=
             address(0);
     }
 }

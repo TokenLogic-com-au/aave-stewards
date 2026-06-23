@@ -96,11 +96,6 @@ interface IPolEthERC20BridgeSteward {
     /// @param allowed Whether token is allowed/disallowed
     function setTokenAllowed(address token, bool allowed) external;
 
-    /// @notice Sets the RootChainManager
-    /// @dev Only callable on Mainnet
-    /// @param rootChainManager Address of the Polygon Root Chain Manager on Mainnet
-    function setRootChainManager(address rootChainManager) external;
-
     /// @notice Returns ETH mock address in order to withdraw ether accordingly on Mainnet
     function ETH_MOCK_ADDRESS() external view returns (address);
 
@@ -108,7 +103,7 @@ interface IPolEthERC20BridgeSteward {
     function COLLECTOR() external view returns (address);
 
     /// @notice Returns the address of the Mainnet contract to exit the burn from
-    function _rootChainManager() external view returns (address);
+    function ROOT_CHAIN_MANAGER() external view returns (address);
 
     /// @notice Returns whether a token can be bridged
     function allowedTokens(address token) external view returns (bool);

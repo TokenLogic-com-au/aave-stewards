@@ -23,7 +23,7 @@ interface IPolEthERC20BridgeSteward {
         address oldRootChainManager
     );
 
-    /// @notice Emitted when a token is approved/disapproved for bridging
+    /// @notice Emitted when a token is allowed/disallowed for bridging
     /// @param token Address of the token to bridge
     /// @param allowed Whether it is allowed/disallowed
     event SetTokenAllowed(address indexed token, bool allowed);

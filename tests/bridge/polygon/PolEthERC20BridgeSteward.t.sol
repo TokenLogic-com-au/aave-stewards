@@ -12,6 +12,7 @@ import {AaveV3Polygon, AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygo
 
 import {PolEthERC20BridgeSteward, IPolEthERC20BridgeSteward} from "src/bridge/polygon/PolEthERC20BridgeSteward.sol";
 import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager.sol";
+import {IWithdrawManager} from "src/bridge/polygon/interfaces/IWithdrawManager.sol";
 
 /**
  * @dev Test for PolEthERC20BridgeSteward contract
@@ -394,7 +395,34 @@ contract ExitPolTest is PolEthERC20BridgeStewardTest {
     bridgePolygon.exitPol();
   }
 
-  function test_revertsIf_proofAlreadyProcessed() public {}
+  function test_successful() public {
+    vm.selectFork(mainnetFork);
+
+    address pol = bridgeMainnet.POL_MAINNET();
+    uint256 amount = 1_000e18;
+
+    // `processExits` is the plasma step that releases the bridged POL to this contract once the
+    // challenge period has elapsed. Mock it as a no-op and simulate the released balance directly,
+    // mirroring how the exit() tests mock ROOT_CHAIN_MANAGER.
+    vm.mockCall(
+      bridgeMainnet.WITHDRAW_MANAGER(),
+      abi.encodeWithSelector(IWithdrawManager.processExits.selector, pol),
+      abi.encode()
+    );
+    deal(pol, address(bridgeMainnet), amount);
+
+    uint256 collectorBalanceBefore = IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR));
+
+    vm.expectEmit(true, true, true, true, address(bridgeMainnet));
+    emit IPolEthERC20BridgeSteward.WithdrawToCollector(pol, amount);
+    bridgeMainnet.exitPol();
+
+    assertEq(
+      IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
+      collectorBalanceBefore + amount
+    );
+    assertEq(IERC20(pol).balanceOf(address(bridgeMainnet)), 0);
+  }
 }
 
 contract ConfirmPolExitTest is PolEthERC20BridgeStewardTest {

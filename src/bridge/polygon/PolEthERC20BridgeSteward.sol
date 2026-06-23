@@ -27,6 +27,10 @@ import {IPolEthERC20BridgeSteward} from "./interfaces/IPolEthERC20BridgeSteward.
  *
  * -- Security Considerations
  *
+ * The Polygon canonical bridge can only move funds across networks to the same address on the other network.
+ * Therefore, the steward needs to be deployed to the same address on both networks.
+ * Only ERC20 tokens that have been mapped from Mainnet to Polygon can be bridged.
+ *
  * The owner or guardian can bridge all funds from Polygon's Collector to Mainnet.
  * If the POL token is migrated (as it happened on September 4th, 2024 from MATIC to POL) then the tokens can get stuck until rescued.
  * The function `bridgePol()` must never be called via `multicall` or bunbled with other `bridge() transactions as Polygon rate-limits

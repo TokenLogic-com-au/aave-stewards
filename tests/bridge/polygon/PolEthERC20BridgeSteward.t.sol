@@ -303,6 +303,18 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
         vm.stopPrank();
     }
 
+    function test_revertsIf_tokenConfigurationUnchanged() public {
+        vm.selectFork(polygonFork);
+        vm.startPrank(OWNER);
+
+        bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+
+        vm.expectRevert(IPolEthERC20BridgeSteward.TokenConfigurationUnchanged.selector);
+        bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+
+        vm.stopPrank();
+    }
+
     function test_successful() public {
         vm.selectFork(polygonFork);
         vm.startPrank(OWNER);

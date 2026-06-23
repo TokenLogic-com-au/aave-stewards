@@ -198,6 +198,8 @@ contract PolEthERC20BridgeSteward is
         if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
         if (token == address(0)) revert InvalidZeroAddress();
 
+        if (allowedTokens[token] == allowed) revert TokenConfigurationUnchanged(token, allowed);
+
         allowedTokens[token] = allowed;
 
         emit SetTokenAllowed(token, allowed);

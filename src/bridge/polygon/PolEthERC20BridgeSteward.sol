@@ -146,7 +146,7 @@ contract PolEthERC20BridgeSteward is
     function exit(
         address token,
         bytes calldata burnProof
-    ) external onlyOwnerOrGuardian {
+    ) external {
         if (block.chainid != ChainIds.MAINNET) revert InvalidChain();
 
         IRootChainManager(ROOT_CHAIN_MANAGER).exit(burnProof);

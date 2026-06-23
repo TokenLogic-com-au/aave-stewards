@@ -401,9 +401,7 @@ contract ExitPolTest is PolEthERC20BridgeStewardTest {
     address pol = bridgeMainnet.POL_MAINNET();
     uint256 amount = 1_000e18;
 
-    // `processExits` is the plasma step that releases the bridged POL to this contract once the
-    // challenge period has elapsed. Mock it as a no-op and simulate the released balance directly,
-    // mirroring how the exit() tests mock ROOT_CHAIN_MANAGER.
+    // Mock processExits
     vm.mockCall(
       bridgeMainnet.WITHDRAW_MANAGER(),
       abi.encodeWithSelector(IWithdrawManager.processExits.selector, pol),

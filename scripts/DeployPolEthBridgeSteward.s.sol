@@ -36,8 +36,7 @@ library DeploymentLibrary {
   function deploy(address owner, address guardian, address collector) internal returns (address steward) {
     bytes32 salt = bytes32(abi.encodePacked(msg.sender, bytes1(0x00), SALT_ENTROPY));
     steward = CREATE_X.deployCreate3(
-      salt,
-      abi.encodePacked(type(PolEthERC20BridgeSteward).creationCode, abi.encode(owner, guardian, collector))
+      salt, abi.encodePacked(type(PolEthERC20BridgeSteward).creationCode, abi.encode(owner, guardian, collector))
     );
     console2.log("PolEthERC20BridgeSteward deployed at", steward);
   }

@@ -7,18 +7,6 @@ import {ICollector} from "aave-helpers/src/CollectorUtils.sol";
 /// @author efecarranza.eth (TokenLogic)
 /// @notice Defines the behaviour of a IPolEthERC20BridgeSteward
 interface IPolEthERC20BridgeSteward {
-    /// @dev Function cannot be called on this network
-    error InvalidChain();
-
-    /// @dev Provided address cannot be the zero-address
-    error InvalidZeroAddress();
-
-    /// @dev Could not withdraw ETH to the Collector
-    error FailedToSendETH();
-
-    /// @dev Token has not been approved for bridging
-    error TokenNotAllowed();
-
     /// @notice Emitted when an ERC20 token is bridged from Polygon
     /// @param token Address of the ERC20 token on Polygon
     /// @param amount The amount of ERC20 token to bridge
@@ -44,6 +32,18 @@ interface IPolEthERC20BridgeSteward {
     /// @param token Address of the ERC20 token on Mainnet
     /// @param amount The amount of ERC20 token to transfer
     event WithdrawToCollector(address indexed token, uint256 amount);
+
+    /// @dev Function cannot be called on this network
+    error InvalidChain();
+
+    /// @dev Provided address cannot be the zero-address
+    error InvalidZeroAddress();
+
+    /// @dev Could not withdraw ETH to the Collector
+    error FailedToSendETH();
+
+    /// @dev Token has not been approved for bridging
+    error TokenNotAllowed();
 
     /// This function withdraws an ERC20 token from Polygon to Mainnet. exit() needs
     /// to be called on mainnet with the corresponding burnProof in order to complete.

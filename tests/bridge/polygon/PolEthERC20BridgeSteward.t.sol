@@ -13,6 +13,14 @@ import {AaveV3Polygon, AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygo
 import {PolEthERC20BridgeSteward, IPolEthERC20BridgeSteward} from "src/bridge/polygon/PolEthERC20BridgeSteward.sol";
 import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager.sol";
 import {IWithdrawManager} from "src/bridge/polygon/interfaces/IWithdrawManager.sol";
+import {IERC20PredicateBurnOnly} from "src/bridge/polygon/interfaces/IERC20PredicateBurnOnly.sol";
+
+/// @dev Helper contract that reverts on any ETH transfer, used to force the ETH-forwarding call to fail.
+contract MockRejectEth {
+  receive() external payable {
+    revert("MockRejectEth: no ETH");
+  }
+}
 
 /**
  * @dev Test for PolEthERC20BridgeSteward contract
@@ -56,6 +64,18 @@ contract ConstructorTest is Test {
   function test_revertsIf_collectorIsZeroAddress() public {
     vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAddress.selector);
     new PolEthERC20BridgeSteward(makeAddr("owner"), makeAddr("guardian"), address(0));
+  }
+
+  function test_successful() public {
+    address owner = makeAddr("owner");
+    address guardian = makeAddr("guardian");
+    address collector = makeAddr("collector");
+
+    PolEthERC20BridgeSteward bridge = new PolEthERC20BridgeSteward(owner, guardian, collector);
+
+    assertEq(bridge.owner(), owner);
+    assertEq(bridge.guardian(), guardian);
+    assertEq(bridge.COLLECTOR(), collector);
   }
 }
 
@@ -117,6 +137,26 @@ contract RescueTokenTest is PolEthERC20BridgeStewardTest {
     );
     assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
   }
+
+  function test_successful_guardianCaller() public {
+    vm.selectFork(mainnetFork);
+
+    uint256 aaveAmount = 1_000e18;
+    deal(AaveV3EthereumAssets.AAVE_UNDERLYING, address(bridgeMainnet), aaveAmount);
+
+    uint256 initialCollectorAaveBalance =
+      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR));
+
+    vm.startPrank(GUARDIAN);
+    bridgeMainnet.rescueToken(AaveV3EthereumAssets.AAVE_UNDERLYING);
+    vm.stopPrank();
+
+    assertEq(
+      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
+      initialCollectorAaveBalance + aaveAmount
+    );
+    assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
+  }
 }
 
 contract RescueEthTest is PolEthERC20BridgeStewardTest {
@@ -143,6 +183,22 @@ contract RescueEthTest is PolEthERC20BridgeStewardTest {
     vm.stopPrank();
 
     assertEq(address(AaveV3Ethereum.COLLECTOR).balance, initialCollectorAaveBalance + amount);
+    assertEq(address(bridgeMainnet).balance, 0);
+  }
+
+  function test_successful_guardianCaller() public {
+    vm.selectFork(mainnetFork);
+
+    uint256 amount = 1_000e18;
+    deal(address(bridgeMainnet), amount);
+
+    uint256 initialCollectorBalance = address(AaveV3Ethereum.COLLECTOR).balance;
+
+    vm.startPrank(GUARDIAN);
+    bridgeMainnet.rescueEth();
+    vm.stopPrank();
+
+    assertEq(address(AaveV3Ethereum.COLLECTOR).balance, initialCollectorBalance + amount);
     assertEq(address(bridgeMainnet).balance, 0);
   }
 }
@@ -219,14 +275,31 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
     vm.stopPrank();
   }
 
-  function test_successful() public {
+  function test_successful_allow() public {
     vm.selectFork(polygonFork);
     vm.startPrank(OWNER);
 
+    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+
     vm.expectEmit(true, true, true, true, address(bridgePolygon));
     emit IPolEthERC20BridgeSteward.SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+    bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+
+    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+  }
+
+  function test_successful_disallow() public {
+    vm.selectFork(polygonFork);
+    vm.startPrank(OWNER);
 
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+
+    vm.expectEmit(true, true, true, true, address(bridgePolygon));
+    emit IPolEthERC20BridgeSteward.SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, false);
+    bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, false);
+
+    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
   }
 }
 
@@ -244,6 +317,14 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
     vm.selectFork(polygonFork);
     vm.expectRevert(abi.encodeWithSelector(IWithGuardian.OnlyGuardianOrOwnerInvalidCaller.selector, address(this)));
     bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, 1_000e6);
+  }
+
+  function test_revertsIf_tokenNotAllowed() public {
+    vm.selectFork(polygonFork);
+    vm.startPrank(OWNER);
+    vm.expectRevert(IPolEthERC20BridgeSteward.TokenNotAllowed.selector);
+    bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, 1_000e6);
+    vm.stopPrank();
   }
 
   function test_revertsIf_zeroAmount() public {
@@ -300,6 +381,15 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
 
     vm.expectRevert(IPolEthERC20BridgeSteward.InvalidZeroAmount.selector);
     bridgePolygon.bridgePol(0, true);
+    vm.stopPrank();
+  }
+
+  function test_revertsIf_tokenNotAllowed() public {
+    vm.selectFork(polygonFork);
+
+    vm.startPrank(OWNER);
+    vm.expectRevert(IPolEthERC20BridgeSteward.TokenNotAllowed.selector);
+    bridgePolygon.bridgePol(1_000e6, false);
     vm.stopPrank();
   }
 
@@ -385,6 +475,75 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
     vm.expectRevert("RootChainManager: EXIT_ALREADY_PROCESSED");
     bridgeMainnet.exit(AaveV3EthereumAssets.USDC_UNDERLYING, burnProof);
   }
+
+  function test_revertsIf_failedToSendEth() public {
+    vm.selectFork(mainnetFork);
+
+    // Deploy a steward whose collector rejects ETH so the forwarding call fails.
+    address rejectingCollector = address(new MockRejectEth());
+    PolEthERC20BridgeSteward bridge = new PolEthERC20BridgeSteward(OWNER, GUARDIAN, rejectingCollector);
+    address ethMockAddress = bridge.ETH_MOCK_ADDRESS();
+
+    bytes memory burnProof = "";
+    vm.mockCall(
+      bridge.ROOT_CHAIN_MANAGER(), abi.encodeWithSelector(IRootChainManager.exit.selector, burnProof), abi.encode()
+    );
+    deal(address(bridge), 1 ether);
+
+    vm.expectRevert(IPolEthERC20BridgeSteward.FailedToSendETH.selector);
+    bridge.exit(ethMockAddress, burnProof);
+  }
+
+  function test_successful_erc20() public {
+    vm.selectFork(mainnetFork);
+
+    uint256 amount = 1_000e6;
+
+    bytes memory burnProof = "";
+    vm.mockCall(
+      bridgeMainnet.ROOT_CHAIN_MANAGER(),
+      abi.encodeWithSelector(IRootChainManager.exit.selector, burnProof),
+      abi.encode()
+    );
+    deal(AaveV3EthereumAssets.USDC_UNDERLYING, address(bridgeMainnet), amount);
+
+    uint256 collectorBalanceBefore =
+      IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR));
+
+    vm.expectEmit(true, true, true, true, address(bridgeMainnet));
+    emit IPolEthERC20BridgeSteward.WithdrawToCollector(AaveV3EthereumAssets.USDC_UNDERLYING, amount);
+    bridgeMainnet.exit(AaveV3EthereumAssets.USDC_UNDERLYING, burnProof);
+
+    assertEq(
+      IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
+      collectorBalanceBefore + amount
+    );
+    assertEq(IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
+  }
+
+  function test_successful_eth() public {
+    vm.selectFork(mainnetFork);
+
+    uint256 amount = 1 ether;
+    address ethMockAddress = bridgeMainnet.ETH_MOCK_ADDRESS();
+
+    bytes memory burnProof = "";
+    vm.mockCall(
+      bridgeMainnet.ROOT_CHAIN_MANAGER(),
+      abi.encodeWithSelector(IRootChainManager.exit.selector, burnProof),
+      abi.encode()
+    );
+    deal(address(bridgeMainnet), amount);
+
+    uint256 collectorBalanceBefore = address(AaveV3Ethereum.COLLECTOR).balance;
+
+    vm.expectEmit(true, true, true, true, address(bridgeMainnet));
+    emit IPolEthERC20BridgeSteward.WithdrawToCollector(ethMockAddress, amount);
+    bridgeMainnet.exit(ethMockAddress, burnProof);
+
+    assertEq(address(AaveV3Ethereum.COLLECTOR).balance, collectorBalanceBefore + amount);
+    assertEq(address(bridgeMainnet).balance, 0);
+  }
 }
 
 contract ExitPolTest is PolEthERC20BridgeStewardTest {
@@ -415,10 +574,7 @@ contract ExitPolTest is PolEthERC20BridgeStewardTest {
     emit IPolEthERC20BridgeSteward.WithdrawToCollector(pol, amount);
     bridgeMainnet.exitPol();
 
-    assertEq(
-      IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
-      collectorBalanceBefore + amount
-    );
+    assertEq(IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR)), collectorBalanceBefore + amount);
     assertEq(IERC20(pol).balanceOf(address(bridgeMainnet)), 0);
   }
 }
@@ -438,6 +594,21 @@ contract ConfirmPolExitTest is PolEthERC20BridgeStewardTest {
       hex"f90d298422e1e6b0b90120433b0d2d0234f58cd9e8404894ba9f3687fc8b0927c359b4c9977f182677eed901942bbf20f1fd9032d1b173b911d2e1d9c0c9de6ae79f6e1330d16e09c833ca452ce56e950ea226ca527012f881475efdd7c622f17394e632a743de1ef352a8b72395afa69ed1137763e1c64f796e1e90a7b85f377f95f03d3ea1eba29f7ee50a60268d6d6a86697fd881c0f18ea8e643b3365e7dc533940650d7606b9d824994b9a9c26e68990484952e8955fdbb8a01177074bc0872e63af46be69c9a0ee3150e0114ebc8a68469240747e157b6a667ed8df73ec4560b77dd60c6dcc1d47517e30d0a87fde2ab53b50ba69a2355ba1086b1b9b88648a8110c4f01a0c57d952b9e4499ec65c0442fc2210d7a54856bb36d5b5fb080f1bfb36b0df40d04cdd784033864598465de198ba0ba95e013f19a21f66a47256c2e42b006ec54f3d13e4cd4ce32cbdba025859e46a01c7d305fdf034cd665c96da4d8902557e4e29b54116e0fd4a235fb16421248d6b9046d02f90469018303f667b9010000000000000000000000000000000000000200000000000000000000000000000000000000000000000810100000000000008000000000000000000000000000000000000000000000000000000000800000000000000000000100000000000000000000000080000000000000000000000000000020000080000000001000000000000000000000080000000000000000000000000004000000000000000000200000000000000000000000000000000000000000000000000000000000004000000000000000000001000000000000000000000000800000108000200000000100000000000000080000000000000000000000000000000000000000100000f9035ef9013d940000000000000000000000000000000000001010f884a0e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4a00000000000000000000000000000000000000000000000000000000000001010a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638a00000000000000000000000000000000000000000000000000000000000001010b8a00000000000000000000000000000000000000000000008812d5ac25c01b45bf000000000000000000000000000000000000000000000088133e07ef64641f1f000000000000000000000000000000000000000001c5e2e002e82004460d76f970000000000000000000000000000000000000000000000000685bc9a448d960000000000000000000000000000000000000000001c5e36815bdcc2a0628bcb87f8dc940000000000000000000000000000000000001010f863a0ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4fa00000000000000000000000007d1afa7b718fb893db30a3abc0cfc608aacfebb0a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638b8600000000000000000000000000000000000000000000008812d5ac25c01b45bf00000000000000000000000000000000000000000000000000685bc9a448d96000000000000000000000000000000000000000000000000000685bc9a448d9600f9013d940000000000000000000000000000000000001010f884a04dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63a00000000000000000000000000000000000000000000000000000000000001010a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638a0000000000000000000000000fcccd43296d9c1601a904eca9b339d94a5e5e098b8a00000000000000000000000000000000000000000000000000008ff34526de00000000000000000000000000000000000000000000000088134d9397f946a5bf00000000000000000000000000000000000000000000009e56bc92173ffaf923400000000000000000000000000000000000000000000088134d03a4b41fc7bf00000000000000000000000000000000000000000000009e56bd220a8521d7234b9073ef9073bf8d1a0d6213f494e7bb1418661069c6da13302d80fb5401182aa96d08220bc0dc8e071a09f6c1782a3c25bf4f666c950141efa981d6e384dcba2f7d6e187494e6b6da64ea0e2802b6c219907c6c4df3941d375d6af0178a87942214cd316153b7b80ba0b86a028698766cbf0cbe3ea9d11207f42080892266da139cbb88dfde2f61e9110f094a0bd71b87290463b0d762268927681cc8eb886ab9aa795e17afdb805288c72b515808080a0ace20d838d862dad238ab335ab3beaee728905d708276f3cb0959ef87a4c862f8080808080808080f901f180a034a531f189309d3615eaa5355b802540eec79d070a52783155500c7b6dbd90f3a038c800c74acdbfb17409a84d9fec28ddb1880095996693fe214604e8b41f02dba027d6ab89f4c64dc0fbd39a63fed8aa2456afc345c8d56e3b1f035dc58027b7f4a03260d7a2ef33945fff14a7d4254a54eb4dddfe2c8666296fc84d726532044082a0f218f242a23fb2006706d42b3e962e6606d5bae8ee2ee46dccd20c51479ae8dda060def2876dd04c270193c01b0911bcb2cf205bdd97fde1b411c1af54b98eb90fa09031ddbf92abfdcf8a5097ec49926df6ce56c600c1e9ecfd6ac5dff3003ddfc0a04962eac743a962f31f72999756fb6280262a2795ed61c5af866352aa140c63ada0bcaaf83e7f037d8965cff1cc28f1580c33958d46717fbf8556b3cea24a78b657a0c843c1561e9e5b73f9dd8b9dbf76d642509dac5f2c8181e8eabc09ec1ebfd1dda09686974194e882ff96c8c8dc0d4adee666b6ea074f6d297fc3de17e0de35b460a0408c89cc15230136f4a3d3e945d8c9ff1affe7360315de4079162eef95164210a0550a8f4f040ebf7fc1c58c4c0689f9e97b0079ef8d29d3ac31471e3d05e52e0da0a8fe18a87d802e43448d1b9ad5c0e3029018a1b47ba25dc2e8f85e82d8dfcaf3a045053b7bbc7d3081fdbc9eb37620c558888a8e9e8deabc89ada98a599862f88080f9047120b9046d02f90469018303f667b9010000000000000000000000000000000000000200000000000000000000000000000000000000000000000810100000000000008000000000000000000000000000000000000000000000000000000000800000000000000000000100000000000000000000000080000000000000000000000000000020000080000000001000000000000000000000080000000000000000000000000004000000000000000000200000000000000000000000000000000000000000000000000000000000004000000000000000000001000000000000000000000000800000108000200000000100000000000000080000000000000000000000000000000000000000100000f9035ef9013d940000000000000000000000000000000000001010f884a0e6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4a00000000000000000000000000000000000000000000000000000000000001010a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638a00000000000000000000000000000000000000000000000000000000000001010b8a00000000000000000000000000000000000000000000008812d5ac25c01b45bf000000000000000000000000000000000000000000000088133e07ef64641f1f000000000000000000000000000000000000000001c5e2e002e82004460d76f970000000000000000000000000000000000000000000000000685bc9a448d960000000000000000000000000000000000000000001c5e36815bdcc2a0628bcb87f8dc940000000000000000000000000000000000001010f863a0ebff2602b3f468259e1e99f613fed6691f3a6526effe6ef3e768ba7ae7a36c4fa00000000000000000000000007d1afa7b718fb893db30a3abc0cfc608aacfebb0a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638b8600000000000000000000000000000000000000000000008812d5ac25c01b45bf00000000000000000000000000000000000000000000000000685bc9a448d96000000000000000000000000000000000000000000000000000685bc9a448d9600f9013d940000000000000000000000000000000000001010f884a04dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63a00000000000000000000000000000000000000000000000000000000000001010a0000000000000000000000000ebaca92a7be0b5f658c0770a81951bba22da5638a0000000000000000000000000fcccd43296d9c1601a904eca9b339d94a5e5e098b8a00000000000000000000000000000000000000000000000000008ff34526de00000000000000000000000000000000000000000000000088134d9397f946a5bf00000000000000000000000000000000000000000000009e56bc92173ffaf923400000000000000000000000000000000000000000000088134d03a4b41fc7bf00000000000000000000000000000000000000000000009e56bd220a8521d723482000501";
 
     vm.expectRevert("Withdrawer and burn exit tx do not match");
+    bridgeMainnet.confirmPolExit(burnProof);
+  }
+
+  function test_successful() public {
+    vm.selectFork(mainnetFork);
+
+    bytes memory burnProof = hex"1234";
+    vm.mockCall(
+      bridgeMainnet.ERC20_PREDICATE_BURN(),
+      abi.encodeWithSelector(IERC20PredicateBurnOnly.startExitWithBurntTokens.selector, burnProof),
+      abi.encode()
+    );
+
+    vm.expectEmit(true, true, true, true, address(bridgeMainnet));
+    emit IPolEthERC20BridgeSteward.ConfirmExit(burnProof);
     bridgeMainnet.confirmPolExit(burnProof);
   }
 }

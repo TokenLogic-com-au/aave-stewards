@@ -73,9 +73,9 @@ contract ConstructorTest is Test {
 
     PolEthERC20BridgeSteward bridge = new PolEthERC20BridgeSteward(owner, guardian, collector);
 
-    assertEq(bridge.owner(), owner);
-    assertEq(bridge.guardian(), guardian);
-    assertEq(bridge.COLLECTOR(), collector);
+    assertEq(bridge.owner(), owner, "owner not set");
+    assertEq(bridge.guardian(), guardian, "guardian not set");
+    assertEq(bridge.COLLECTOR(), collector, "collector not set");
   }
 }
 
@@ -85,12 +85,12 @@ contract ReceiveTest is PolEthERC20BridgeStewardTest {
 
     uint256 balanceBefore = address(bridgeMainnet).balance;
 
-    assertEq(address(bridgeMainnet).balance, 0);
+    assertEq(address(bridgeMainnet).balance, 0, "bridge should start with no ETH");
 
     (bool a,) = address(bridgeMainnet).call{value: 1 ether}("");
-    assertTrue(a);
+    assertTrue(a, "ETH transfer to bridge failed");
 
-    assertEq(balanceBefore + 1 ether, address(bridgeMainnet).balance);
+    assertEq(balanceBefore + 1 ether, address(bridgeMainnet).balance, "bridge ETH balance not increased");
   }
 
   function test_successful_receivesPOL() public {
@@ -98,12 +98,12 @@ contract ReceiveTest is PolEthERC20BridgeStewardTest {
 
     uint256 balanceBefore = address(bridgePolygon).balance;
 
-    assertEq(address(bridgePolygon).balance, 0);
+    assertEq(address(bridgePolygon).balance, 0, "bridge should start with no POL");
 
     (bool a,) = address(bridgePolygon).call{value: 1 ether}("");
-    assertTrue(a);
+    assertTrue(a, "POL transfer to bridge failed");
 
-    assertEq(balanceBefore + 1 ether, address(bridgePolygon).balance);
+    assertEq(balanceBefore + 1 ether, address(bridgePolygon).balance, "bridge POL balance not increased");
   }
 }
 
@@ -124,13 +124,21 @@ contract RescueTokenTest is PolEthERC20BridgeStewardTest {
 
   function _test_successful(address caller) internal {
     vm.selectFork(mainnetFork);
-    assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
+    assertEq(
+      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)),
+      0,
+      "bridge should start with no AAVE"
+    );
 
     uint256 aaveAmount = 1_000e18;
 
     deal(AaveV3EthereumAssets.AAVE_UNDERLYING, address(bridgeMainnet), aaveAmount);
 
-    assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), aaveAmount);
+    assertEq(
+      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)),
+      aaveAmount,
+      "bridge AAVE not funded"
+    );
 
     uint256 initialCollectorAaveBalance =
       IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR));
@@ -141,9 +149,12 @@ contract RescueTokenTest is PolEthERC20BridgeStewardTest {
 
     assertEq(
       IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
-      initialCollectorAaveBalance + aaveAmount
+      initialCollectorAaveBalance + aaveAmount,
+      "AAVE not rescued to collector"
     );
-    assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
+    assertEq(
+      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0, "bridge AAVE not drained"
+    );
   }
 }
 
@@ -164,13 +175,13 @@ contract RescueEthTest is PolEthERC20BridgeStewardTest {
 
   function _test_successful(address caller) internal {
     vm.selectFork(mainnetFork);
-    assertEq(address(bridgeMainnet).balance, 0);
+    assertEq(address(bridgeMainnet).balance, 0, "bridge should start with no ETH");
 
     uint256 amount = 1_000e18;
 
     deal(address(bridgeMainnet), amount);
 
-    assertEq(address(bridgeMainnet).balance, amount);
+    assertEq(address(bridgeMainnet).balance, amount, "bridge ETH not funded");
 
     uint256 initialCollectorBalance = address(AaveV3Ethereum.COLLECTOR).balance;
 
@@ -178,20 +189,24 @@ contract RescueEthTest is PolEthERC20BridgeStewardTest {
     bridgeMainnet.rescueEth();
     vm.stopPrank();
 
-    assertEq(address(AaveV3Ethereum.COLLECTOR).balance, initialCollectorBalance + amount);
-    assertEq(address(bridgeMainnet).balance, 0);
+    assertEq(
+      address(AaveV3Ethereum.COLLECTOR).balance, initialCollectorBalance + amount, "ETH not rescued to collector"
+    );
+    assertEq(address(bridgeMainnet).balance, 0, "bridge ETH not drained");
   }
 }
 
 contract MaxRescueTest is PolEthERC20BridgeStewardTest {
   function test_maxRescue() public {
     vm.selectFork(mainnetFork);
-    assertEq(bridgeMainnet.maxRescue(AaveV3EthereumAssets.USDC_UNDERLYING), 0);
+    assertEq(bridgeMainnet.maxRescue(AaveV3EthereumAssets.USDC_UNDERLYING), 0, "maxRescue should be 0 when unfunded");
 
     uint256 mintAmount = 1_000_000e18;
     deal(AaveV3EthereumAssets.USDC_UNDERLYING, address(bridgeMainnet), mintAmount);
 
-    assertEq(bridgeMainnet.maxRescue(AaveV3EthereumAssets.USDC_UNDERLYING), mintAmount);
+    assertEq(
+      bridgeMainnet.maxRescue(AaveV3EthereumAssets.USDC_UNDERLYING), mintAmount, "maxRescue should equal balance"
+    );
   }
 }
 
@@ -205,13 +220,13 @@ contract IsTokenMapped is PolEthERC20BridgeStewardTest {
   function test_successful_returnsTrue() public {
     vm.selectFork(mainnetFork);
 
-    assertTrue(bridgeMainnet.isTokenMapped(AaveV3PolygonAssets.USDC_UNDERLYING));
+    assertTrue(bridgeMainnet.isTokenMapped(AaveV3PolygonAssets.USDC_UNDERLYING), "mapped token reported as unmapped");
   }
 
   function test_successful_returnsFalse() public {
     vm.selectFork(mainnetFork);
 
-    assertFalse(bridgeMainnet.isTokenMapped(makeAddr("new-erc20-token")));
+    assertFalse(bridgeMainnet.isTokenMapped(makeAddr("new-erc20-token")), "unmapped token reported as mapped");
   }
 }
 
@@ -259,13 +274,13 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
     vm.selectFork(polygonFork);
     vm.startPrank(OWNER);
 
-    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING), "token should start disallowed");
 
     vm.expectEmit(true, true, true, true, address(bridgePolygon));
     emit IPolEthERC20BridgeSteward.SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
 
-    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING), "token not allowed after enabling");
   }
 
   function test_successful_disallow() public {
@@ -273,13 +288,13 @@ contract SetTokenAllowedTest is PolEthERC20BridgeStewardTest {
     vm.startPrank(OWNER);
 
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
-    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+    assertTrue(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING), "token not allowed after enabling");
 
     vm.expectEmit(true, true, true, true, address(bridgePolygon));
     emit IPolEthERC20BridgeSteward.SetTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, false);
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, false);
 
-    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING));
+    assertFalse(bridgePolygon.allowedTokens(AaveV3PolygonAssets.USDC_UNDERLYING), "token still allowed after disabling");
   }
 }
 
@@ -331,7 +346,11 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
     // Collector holds aTokens; load with some underlying tokens required for the test.
     deal(AaveV3PolygonAssets.USDC_UNDERLYING, address(AaveV3Polygon.COLLECTOR), amount);
 
-    assertEq(IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
+    assertEq(
+      IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)),
+      0,
+      "bridge should start with no USDC"
+    );
 
     // `setTokenAllowed` is owner-only; allowlist as owner before bridging as `caller`.
     vm.prank(OWNER);
@@ -342,7 +361,9 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
     vm.prank(caller);
     bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
 
-    assertEq(IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
+    assertEq(
+      IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)), 0, "bridge USDC not withdrawn"
+    );
   }
 }
 
@@ -404,8 +425,12 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
 
     uint256 amount = 1_000e6;
 
-    assertEq(IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
-    assertEq(address(bridgePolygon).balance, 0);
+    assertEq(
+      IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)),
+      0,
+      "bridge should start with no WPOL"
+    );
+    assertEq(address(bridgePolygon).balance, 0, "bridge should start with no POL");
 
     // `setTokenAllowed` is owner-only; allowlist as owner before bridging as `caller`.
     vm.prank(OWNER);
@@ -416,8 +441,10 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
     vm.prank(caller);
     bridgePolygon.bridgePol(amount, unwrap);
 
-    assertEq(IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
-    assertEq(address(bridgePolygon).balance, 0);
+    assertEq(
+      IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)), 0, "bridge WPOL not withdrawn"
+    );
+    assertEq(address(bridgePolygon).balance, 0, "bridge POL not withdrawn");
   }
 }
 
@@ -509,9 +536,12 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
 
     assertEq(
       IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
-      collectorBalanceBefore + amount
+      collectorBalanceBefore + amount,
+      "USDC not forwarded to collector"
     );
-    assertEq(IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
+    assertEq(
+      IERC20(AaveV3EthereumAssets.USDC_UNDERLYING).balanceOf(address(bridgeMainnet)), 0, "bridge USDC not drained"
+    );
   }
 
   function test_successful_eth() public {
@@ -534,8 +564,10 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
     emit IPolEthERC20BridgeSteward.WithdrawToCollector(ethMockAddress, amount);
     bridgeMainnet.exit(ethMockAddress, burnProof);
 
-    assertEq(address(AaveV3Ethereum.COLLECTOR).balance, collectorBalanceBefore + amount);
-    assertEq(address(bridgeMainnet).balance, 0);
+    assertEq(
+      address(AaveV3Ethereum.COLLECTOR).balance, collectorBalanceBefore + amount, "ETH not forwarded to collector"
+    );
+    assertEq(address(bridgeMainnet).balance, 0, "bridge ETH not drained");
   }
 }
 
@@ -567,8 +599,12 @@ contract ExitPolTest is PolEthERC20BridgeStewardTest {
     emit IPolEthERC20BridgeSteward.WithdrawToCollector(pol, amount);
     bridgeMainnet.exitPol();
 
-    assertEq(IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR)), collectorBalanceBefore + amount);
-    assertEq(IERC20(pol).balanceOf(address(bridgeMainnet)), 0);
+    assertEq(
+      IERC20(pol).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
+      collectorBalanceBefore + amount,
+      "POL not forwarded to collector"
+    );
+    assertEq(IERC20(pol).balanceOf(address(bridgeMainnet)), 0, "bridge POL not drained");
   }
 }
 

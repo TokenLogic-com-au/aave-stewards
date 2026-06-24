@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Address} from "openzeppelin-contracts/contracts/utils/Address.sol";
 import {AaveV3PolygonAssets} from "aave-address-book/AaveV3Polygon.sol";
 import {OwnableWithGuardian} from "solidity-utils/contracts/access-control/OwnableWithGuardian.sol";
 import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
@@ -127,10 +128,7 @@ contract PolEthERC20BridgeSteward is IPolEthERC20BridgeSteward, OwnableWithGuard
       uint256 balance = address(this).balance;
       if (balance == 0) revert InvalidZeroAmount();
 
-      (bool success,) = address(COLLECTOR).call{value: balance}("");
-      if (!success) {
-        revert FailedToSendETH();
-      }
+      Address.sendValue(payable(COLLECTOR), balance);
       emit WithdrawToCollector(token, balance);
     } else {
       uint256 balance = IERC20(token).balanceOf(address(this));

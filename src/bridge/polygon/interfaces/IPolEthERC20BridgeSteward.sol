@@ -39,9 +39,6 @@ interface IPolEthERC20BridgeSteward {
   /// @dev Provided amount cannot be zero
   error InvalidZeroAmount();
 
-  /// @dev Could not withdraw ETH to the Collector
-  error FailedToSendETH();
-
   /// @dev The new token configuration is the same as the current one
   /// @param token The address of the ERC20 token
   /// @param allowed The current allowed status of the token

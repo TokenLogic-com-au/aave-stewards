@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {Errors} from "openzeppelin-contracts/contracts/utils/Errors.sol";
 import {IWithGuardian} from "solidity-utils/contracts/access-control/interfaces/IWithGuardian.sol";
 import {GovernanceV3Polygon} from "aave-address-book/GovernanceV3Polygon.sol";
 import {AaveV3Ethereum, AaveV3EthereumAssets} from "aave-address-book/AaveV3Ethereum.sol";
@@ -504,7 +505,8 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
     vm.mockCallRevert(address(AaveV3Ethereum.COLLECTOR), new bytes(0), bytes("collector rejects ETH"));
     deal(address(bridgeMainnet), 1 ether);
 
-    vm.expectRevert(IPolEthERC20BridgeSteward.FailedToSendETH.selector);
+    // `Address.sendValue` surfaces a failed transfer as `Errors.FailedCall`.
+    vm.expectRevert(Errors.FailedCall.selector);
     bridgeMainnet.exit(ethMockAddress, burnProof);
   }
 

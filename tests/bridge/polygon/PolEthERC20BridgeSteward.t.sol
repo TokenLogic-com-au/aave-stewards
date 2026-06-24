@@ -115,6 +115,14 @@ contract RescueTokenTest is PolEthERC20BridgeStewardTest {
   }
 
   function test_successful_ownerCaller() public {
+    _test_successful(OWNER);
+  }
+
+  function test_successful_guardianCaller() public {
+    _test_successful(GUARDIAN);
+  }
+
+  function _test_successful(address caller) internal {
     vm.selectFork(mainnetFork);
     assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
 
@@ -127,27 +135,7 @@ contract RescueTokenTest is PolEthERC20BridgeStewardTest {
     uint256 initialCollectorAaveBalance =
       IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR));
 
-    vm.startPrank(OWNER);
-    bridgeMainnet.rescueToken(AaveV3EthereumAssets.AAVE_UNDERLYING);
-    vm.stopPrank();
-
-    assertEq(
-      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR)),
-      initialCollectorAaveBalance + aaveAmount
-    );
-    assertEq(IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(bridgeMainnet)), 0);
-  }
-
-  function test_successful_guardianCaller() public {
-    vm.selectFork(mainnetFork);
-
-    uint256 aaveAmount = 1_000e18;
-    deal(AaveV3EthereumAssets.AAVE_UNDERLYING, address(bridgeMainnet), aaveAmount);
-
-    uint256 initialCollectorAaveBalance =
-      IERC20(AaveV3EthereumAssets.AAVE_UNDERLYING).balanceOf(address(AaveV3Ethereum.COLLECTOR));
-
-    vm.startPrank(GUARDIAN);
+    vm.startPrank(caller);
     bridgeMainnet.rescueToken(AaveV3EthereumAssets.AAVE_UNDERLYING);
     vm.stopPrank();
 
@@ -167,6 +155,14 @@ contract RescueEthTest is PolEthERC20BridgeStewardTest {
   }
 
   function test_successful_ownerCaller() public {
+    _test_successful(OWNER);
+  }
+
+  function test_successful_guardianCaller() public {
+    _test_successful(GUARDIAN);
+  }
+
+  function _test_successful(address caller) internal {
     vm.selectFork(mainnetFork);
     assertEq(address(bridgeMainnet).balance, 0);
 
@@ -176,25 +172,9 @@ contract RescueEthTest is PolEthERC20BridgeStewardTest {
 
     assertEq(address(bridgeMainnet).balance, amount);
 
-    uint256 initialCollectorAaveBalance = address(AaveV3Ethereum.COLLECTOR).balance;
-
-    vm.startPrank(OWNER);
-    bridgeMainnet.rescueEth();
-    vm.stopPrank();
-
-    assertEq(address(AaveV3Ethereum.COLLECTOR).balance, initialCollectorAaveBalance + amount);
-    assertEq(address(bridgeMainnet).balance, 0);
-  }
-
-  function test_successful_guardianCaller() public {
-    vm.selectFork(mainnetFork);
-
-    uint256 amount = 1_000e18;
-    deal(address(bridgeMainnet), amount);
-
     uint256 initialCollectorBalance = address(AaveV3Ethereum.COLLECTOR).balance;
 
-    vm.startPrank(GUARDIAN);
+    vm.startPrank(caller);
     bridgeMainnet.rescueEth();
     vm.stopPrank();
 
@@ -336,7 +316,15 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
     vm.stopPrank();
   }
 
-  function test_successful() public {
+  function test_successful_ownerCaller() public {
+    _test_successful(OWNER);
+  }
+
+  function test_successful_guardianCaller() public {
+    _test_successful(GUARDIAN);
+  }
+
+  function _test_successful(address caller) internal {
     vm.selectFork(polygonFork);
 
     uint256 amount = 1_000e6;
@@ -345,12 +333,14 @@ contract BridgeTest is PolEthERC20BridgeStewardTest {
 
     assertEq(IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
 
-    vm.startPrank(OWNER);
+    // `setTokenAllowed` is owner-only; allowlist as owner before bridging as `caller`.
+    vm.prank(OWNER);
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.USDC_UNDERLYING, true);
+
     vm.expectEmit(true, true, true, true, address(bridgePolygon));
     emit IPolEthERC20BridgeSteward.Bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
+    vm.prank(caller);
     bridgePolygon.bridge(AaveV3PolygonAssets.USDC_UNDERLYING, amount);
-    vm.stopPrank();
 
     assertEq(IERC20(AaveV3PolygonAssets.USDC_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
   }
@@ -393,38 +383,41 @@ contract BridgePolTest is PolEthERC20BridgeStewardTest {
     vm.stopPrank();
   }
 
-  function test_successful_noUnwrap() public {
-    vm.selectFork(polygonFork);
-
-    uint256 amount = 1_000e6;
-
-    assertEq(address(bridgePolygon).balance, 0);
-
-    vm.startPrank(OWNER);
-    bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.WPOL_UNDERLYING, true);
-    vm.expectEmit();
-    emit IPolEthERC20BridgeSteward.Bridge(bridgePolygon.POL_POLYGON(), amount);
-    bridgePolygon.bridgePol(amount, false);
-    vm.stopPrank();
-
-    assertEq(address(bridgePolygon).balance, 0);
+  function test_successful_ownerCaller_noUnwrap() public {
+    _test_successful(OWNER, false);
   }
 
-  function test_successful_withUnwrap() public {
+  function test_successful_guardianCaller_noUnwrap() public {
+    _test_successful(GUARDIAN, false);
+  }
+
+  function test_successful_ownerCaller_withUnwrap() public {
+    _test_successful(OWNER, true);
+  }
+
+  function test_successful_guardianCaller_withUnwrap() public {
+    _test_successful(GUARDIAN, true);
+  }
+
+  function _test_successful(address caller, bool unwrap) internal {
     vm.selectFork(polygonFork);
 
     uint256 amount = 1_000e6;
 
     assertEq(IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
+    assertEq(address(bridgePolygon).balance, 0);
 
-    vm.startPrank(OWNER);
+    // `setTokenAllowed` is owner-only; allowlist as owner before bridging as `caller`.
+    vm.prank(OWNER);
     bridgePolygon.setTokenAllowed(AaveV3PolygonAssets.WPOL_UNDERLYING, true);
+
     vm.expectEmit();
     emit IPolEthERC20BridgeSteward.Bridge(bridgePolygon.POL_POLYGON(), amount);
-    bridgePolygon.bridgePol(amount, true);
-    vm.stopPrank();
+    vm.prank(caller);
+    bridgePolygon.bridgePol(amount, unwrap);
 
     assertEq(IERC20(AaveV3PolygonAssets.WPOL_UNDERLYING).balanceOf(address(bridgePolygon)), 0);
+    assertEq(address(bridgePolygon).balance, 0);
   }
 }
 

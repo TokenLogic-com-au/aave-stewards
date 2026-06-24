@@ -15,13 +15,6 @@ import {IRootChainManager} from "src/bridge/polygon/interfaces/IRootChainManager
 import {IWithdrawManager} from "src/bridge/polygon/interfaces/IWithdrawManager.sol";
 import {IERC20PredicateBurnOnly} from "src/bridge/polygon/interfaces/IERC20PredicateBurnOnly.sol";
 
-/// @dev Helper contract that reverts on any ETH transfer, used to force the ETH-forwarding call to fail.
-contract MockRejectEth {
-  receive() external payable {
-    revert("MockRejectEth: no ETH");
-  }
-}
-
 /**
  * @dev Test for PolEthERC20BridgeSteward contract
  * command: forge test -vvv --match-path tests/bridge/polygon/PolEthERC20BridgeSteward.t.sol
@@ -499,19 +492,20 @@ contract ExitTest is PolEthERC20BridgeStewardTest {
   function test_revertsIf_failedToSendEth() public {
     vm.selectFork(mainnetFork);
 
-    // Deploy a steward whose collector rejects ETH so the forwarding call fails.
-    address rejectingCollector = address(new MockRejectEth());
-    PolEthERC20BridgeSteward bridge = new PolEthERC20BridgeSteward(OWNER, GUARDIAN, rejectingCollector);
-    address ethMockAddress = bridge.ETH_MOCK_ADDRESS();
+    address ethMockAddress = bridgeMainnet.ETH_MOCK_ADDRESS();
 
     bytes memory burnProof = "";
     vm.mockCall(
-      bridge.ROOT_CHAIN_MANAGER(), abi.encodeWithSelector(IRootChainManager.exit.selector, burnProof), abi.encode()
+      bridgeMainnet.ROOT_CHAIN_MANAGER(),
+      abi.encodeWithSelector(IRootChainManager.exit.selector, burnProof),
+      abi.encode()
     );
-    deal(address(bridge), 1 ether);
+    // Make the ETH-forwarding call to the collector (empty calldata) revert.
+    vm.mockCallRevert(address(AaveV3Ethereum.COLLECTOR), new bytes(0), bytes("collector rejects ETH"));
+    deal(address(bridgeMainnet), 1 ether);
 
     vm.expectRevert(IPolEthERC20BridgeSteward.FailedToSendETH.selector);
-    bridge.exit(ethMockAddress, burnProof);
+    bridgeMainnet.exit(ethMockAddress, burnProof);
   }
 
   function test_successful_erc20() public {

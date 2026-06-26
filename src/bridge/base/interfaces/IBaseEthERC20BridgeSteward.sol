@@ -34,7 +34,7 @@ interface IBaseEthERC20BridgeSteward {
 
   /// @notice Emitted when a token mapping is removed
   /// @param l2Token Address of the token on Base that was removed
-  event TokenMappingRemoved(address indexed l2Token);
+  event RemovedTokenMapping(address indexed l2Token);
 
   /// @notice Bridges an ERC20 token from the Base Collector to the Mainnet Collector
   /// @param token The ERC20 address on Base
@@ -63,8 +63,8 @@ interface IBaseEthERC20BridgeSteward {
   /// @notice Returns the minimum gas limit for bridge operations
   function MIN_GAS_LIMIT() external view returns (uint32);
 
-  /// @notice Returns the L1 token address mapped to an L2 token
+  /// @notice Returns the L1 token configured for `l2Token`
   /// @param l2Token Address of the token on Base
   /// @return l1Token Address of the corresponding token on Mainnet
-  function tokenMapping(address l2Token) external view returns (address l1Token);
+  function config(address l2Token) external view returns (address l1Token);
 }

@@ -56,7 +56,7 @@ contract BaseEthERC20BridgeSteward is IBaseEthERC20BridgeSteward, OwnableWithGua
   uint32 public constant MIN_GAS_LIMIT = 250_000;
 
   /// @inheritdoc IBaseEthERC20BridgeSteward
-  mapping(address l2Token => address l1Token) public tokenMapping;
+  mapping(address l2Token => address l1Token) public config;
 
   /// @param initialOwner The owner of the contract upon deployment
   /// @param initialGuardian The guardian of the contract upon deployment
@@ -68,7 +68,7 @@ contract BaseEthERC20BridgeSteward is IBaseEthERC20BridgeSteward, OwnableWithGua
   function bridge(address token, uint256 amount) external onlyOwnerOrGuardian {
     require(amount > 0, InvalidZeroAmount());
 
-    address l1Token = tokenMapping[token];
+    address l1Token = config[token];
     require(l1Token != address(0), TokenNotSet());
 
     ICollector(address(AaveV3Base.COLLECTOR)).transfer(IERC20(token), address(this), amount);
@@ -84,19 +84,19 @@ contract BaseEthERC20BridgeSteward is IBaseEthERC20BridgeSteward, OwnableWithGua
   /// @inheritdoc IBaseEthERC20BridgeSteward
   function setTokenMapping(address l2Token, address l1Token) external onlyOwner {
     require(l2Token != address(0) && l1Token != address(0), InvalidZeroAddress());
-    require(tokenMapping[l2Token] == address(0), TokenAlreadySet());
+    require(config[l2Token] == address(0), TokenAlreadySet());
     require(_isCorrectTokenPair(l2Token, l1Token), InvalidL1Token());
 
-    tokenMapping[l2Token] = l1Token;
+    config[l2Token] = l1Token;
     emit TokenMappingUpdated(l2Token, l1Token);
   }
 
   /// @inheritdoc IBaseEthERC20BridgeSteward
   function removeTokenMapping(address l2Token) external onlyOwner {
-    require(tokenMapping[l2Token] != address(0), TokenNotSet());
+    require(config[l2Token] != address(0), TokenNotSet());
 
-    delete tokenMapping[l2Token];
-    emit TokenMappingRemoved(l2Token);
+    delete config[l2Token];
+    emit RemovedTokenMapping(l2Token);
   }
 
   /// @inheritdoc IBaseEthERC20BridgeSteward

@@ -107,7 +107,7 @@ contract SetTokenMappingTest is BaseEthERC20BridgeStewardTest {
     steward.setTokenMapping(L2_TOKEN, L1_TOKEN);
     vm.stopPrank();
 
-    assertEq(steward.tokenMapping(L2_TOKEN), L1_TOKEN);
+    assertEq(steward.config(L2_TOKEN), L1_TOKEN);
   }
 }
 
@@ -129,14 +129,14 @@ contract RemoveTokenMappingTest is BaseEthERC20BridgeStewardTest {
   function test_successful() public {
     vm.startPrank(OWNER);
     steward.setTokenMapping(L2_TOKEN, L1_TOKEN);
-    assertEq(steward.tokenMapping(L2_TOKEN), L1_TOKEN);
+    assertEq(steward.config(L2_TOKEN), L1_TOKEN);
 
     vm.expectEmit(true, false, false, false, address(steward));
-    emit IBaseEthERC20BridgeSteward.TokenMappingRemoved(L2_TOKEN);
+    emit IBaseEthERC20BridgeSteward.RemovedTokenMapping(L2_TOKEN);
     steward.removeTokenMapping(L2_TOKEN);
     vm.stopPrank();
 
-    assertEq(steward.tokenMapping(L2_TOKEN), address(0));
+    assertEq(steward.config(L2_TOKEN), address(0));
   }
 }
 

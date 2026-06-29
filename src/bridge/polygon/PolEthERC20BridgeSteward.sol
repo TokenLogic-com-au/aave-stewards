@@ -33,18 +33,21 @@ import {IPolEthERC20BridgeSteward} from "./interfaces/IPolEthERC20BridgeSteward.
  * Only ERC20 tokens that have been mapped from Mainnet to Polygon can be bridged.
  *
  * The owner or guardian can bridge all funds from Polygon's Collector to Mainnet.
- * If the POL token is migrated (as it happened on September 4th, 2024 from MATIC to POL) then the tokens can get stuck until rescued.
- * The function `bridgePol()` must never be called via `multicall` or bunbled with other `bridge() transactions as Polygon rate-limits
- * bridges by the number of events emitted in a single transaction. `bridgePol()` must always be called alone and ensuring that the
- * number of events in the trasaction is less than 10, even counting the events emitted to transfer from the Collector to the bridge contract.
+ * If the POL token is migrated (as it happened on September 4th, 2024 from MATIC to POL) then the tokens can get stuck
+ * until rescued.
+ * The function `bridgePol()` must never be called via `multicall` or bundled with other `bridge() transactions as
+ * Polygon rate-limits bridges by the number of events emitted in a single transaction. `bridgePol()` must always be
+ * called alone and ensuring that the number of events in the transaction is less than 10, even counting the events
+ * emitted to transfer from the Collector to the bridge contract.
  *
  * -- Permissions
  * The contract implements OwnableWithGuardian.
  * The owner will always be the respective network Level 1 Executor (governance).
  * The guardian role will be given to a Financial Service provider of the DAO.
  *
- * While the permitted Service Provider will have full control over the funds, the allowed actions are limited by the contract itself.
- * All token interactions start and end on the Collector, so no funds ever leave the DAO's possession at any point in time.
+ * While the permitted Service Provider will have full control over the funds, the allowed actions are limited by the
+ * contract itself. All token interactions start and end on the Collector, so no funds ever leave the DAO's possession
+ * at any point in time.
  */
 contract PolEthERC20BridgeSteward is IPolEthERC20BridgeSteward, OwnableWithGuardian, RescuableBase, Multicall {
   using SafeERC20 for IERC20;

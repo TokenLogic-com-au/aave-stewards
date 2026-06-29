@@ -51,11 +51,11 @@ Callable on Mainnet to finish the withdrawal process. Callable 30-90 minutes aft
 
 `function confirmPolExit(bytes calldata burnProof) external`
 
-Callable on Mainnet (Step 2 of 3) to confirm a withdrawl of POL. Callable 30-90 minutes after `bridge()` is called and proof is available via API.
+Callable on Mainnet (Step 2 of 3) to confirm a withdrawal of POL. Callable 30-90 minutes after `bridge()` is called and proof is available via API.
 
 `function exitPol() external`
 
-Callable on Mainnet (Step 3 of 3) to perform actual withdrawl of POL to the Collector. Callable after check-point time passes.
+Callable on Mainnet (Step 3 of 3) to perform actual withdrawal of POL to the Collector. Callable after check-point time passes.
 
 `function rescueToken(address erc20Token) external;`
 

@@ -93,8 +93,8 @@ contract PolEthERC20BridgeSteward is IPolEthERC20BridgeSteward, OwnableWithGuard
   /// @inheritdoc IPolEthERC20BridgeSteward
   function bridge(address token, uint256 amount) external onlyOwnerOrGuardian {
     if (block.chainid != ChainIds.POLYGON) revert InvalidChain();
-    if (!allowedTokens[token]) revert TokenNotAllowed();
     if (amount == 0) revert InvalidZeroAmount();
+    if (!allowedTokens[token]) revert TokenNotAllowed();
 
     ICollector(COLLECTOR).transfer(IERC20(token), address(this), amount);
 
